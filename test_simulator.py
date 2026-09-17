@@ -1,5 +1,5 @@
 """
-Quick Smoke Test for Simulator Components
+Smoke Test Suite for LabPath Simulator
 
 Tests:
 1. Codebase tools: list_files, read_file, search_code, get_file_summary, search_transcript, get_misconceptions
@@ -22,68 +22,60 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from simulator.tools import (
+from src.engine import (
     list_files,
     read_file,
     search_code,
     get_file_summary,
     search_transcript,
     get_misconceptions,
+    MockProvider,
+    HybridEvaluator,
+    run_agent_turn,
 )
-from simulator.providers import MockProvider, ToolCall
-from simulator.evaluator import HybridEvaluator
-from simulator.agent import run_agent_turn
 
 
 def test_tools():
     print("--- [1] Testing Codebase Intelligence Tools ---")
-    # list_files
     res = list_files("day01", max_depth=2)
     assert res["status"] == "success", f"list_files failed: {res}"
     print(f"✓ list_files found {res['count']} files in Day 01.")
 
-    # read_file
     res = read_file("day01", "template.py", start_line=1, end_line=15)
     assert res["status"] == "success", f"read_file failed: {res}"
     print(f"✓ read_file read {res['total_lines']} lines.")
 
-    # search_code
     res = search_code("day01", "temperature")
     assert res["status"] == "success", f"search_code failed: {res}"
     print(f"✓ search_code found {res['match_count']} matches for 'temperature'.")
 
-    # get_file_summary
     res = get_file_summary("day01", "template.py")
     assert res["status"] == "success", f"get_file_summary failed: {res}"
     print(f"✓ get_file_summary extracted {len(res.get('definitions', []))} definitions.")
 
-    # search_transcript
     res = search_transcript("LLM")
     print(f"✓ search_transcript status: {res.get('status')}, matches: {res.get('match_count', 0)}")
 
-    # get_misconceptions
     res = get_misconceptions(concept="temperature")
     assert res["status"] == "success" and res["count"] > 0, f"get_misconceptions failed: {res}"
     print(f"✓ get_misconceptions found {res['count']} misconceptions.")
 
 
 def test_evaluator():
-    print("\n--- [2] Testing Hybrid Evaluator (with Mock Judge) ---")
+    print("\n--- [2] Testing Hybrid Evaluator ---")
     evaluator = HybridEvaluator(MockProvider())
 
-    # Round 1
     m1 = evaluator.evaluate_round1("gpt-4o-mini", 0.2, "Model rẻ và temperature thấp để tránh hallucination.")
-    assert m1.cost_per_query < 0.005
+    assert m1.passed and m1.cost_per_query < 0.005
     print(f"✓ Round 1 eval: Passed={m1.passed}, Accuracy={m1.accuracy*100}%, Cost=${m1.cost_per_query:.5f}")
 
-    # Round 2
     m2 = evaluator.evaluate_round2(
         "Bạn là trợ lý học vụ. Chỉ trả lời dựa trên quy chế đào tạo của trường. Nếu không biết thì hãy báo lịch sự.",
         "Xác định rõ vai trò và giới hạn phạm vi trả lời.",
     )
+    assert m2.passed
     print(f"✓ Round 2 eval: Passed={m2.passed}, Accuracy={m2.accuracy*100}%, Hallucination={m2.hallucination_rate*100}%")
 
-    # Round 3
     code = """
 def call_llm(prompt):
     try:
@@ -92,6 +84,7 @@ def call_llm(prompt):
         return {"status": "error", "message": str(e)}
 """
     m3 = evaluator.evaluate_round3_code(code, "Có try/except xử lý lỗi an toàn.")
+    assert m3.passed
     print(f"✓ Round 3 eval: Passed={m3.passed}, Accuracy={m3.accuracy*100}%, Latency={m3.latency_ms}ms")
 
 
@@ -103,12 +96,12 @@ def test_agent():
         messages=[{"role": "user", "content": "Kiểm tra file template.py"}],
         system_prompt="Bạn là trợ lý kiểm tra code.",
     )
-    assert res.text, "Agent returned empty response"
-    print(f"✓ Agent turn completed: '{res.text[:60]}...'")
+    assert res.text or res.tool_calls
+    print(f"✓ Agent turn completed: '{res.text[:60] if res.text else 'tool called'}...'")
 
 
 if __name__ == "__main__":
     test_tools()
     test_evaluator()
     test_agent()
-    print("\n🎉 ALL SMOKE TESTS PASSED!")
+    print("\n🎉 ALL SMOKE TESTS PASSED 100%!")

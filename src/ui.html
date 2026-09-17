@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>LabPath — UI Template</title>
+  <meta name="description" content="Khung giao diện LabPath: VLearn shell và Split Workspace trống.">
+  <style>
+/* LabPath design tokens. These are proposal values, not verified VLearn brand tokens. */
+:root {
+  color-scheme: light;
+  --lp-primary: #4566EF;
+  --lp-primary-dark: #304EC9;
+  --lp-primary-soft: #EEF2FF;
+  --lp-canvas: #F5F7FC;
+  --lp-surface: #FFFFFF;
+  --lp-text: #172554;
+  --lp-ink: #18243B;
+  --lp-muted: #64748B;
+  --lp-subtle: #78869A;
+  --lp-border: #E2E8F0;
+  --lp-border-strong: #CBD5E1;
+  --lp-info-bg: #EFF3FF;
+  --lp-info-text: #2F4EAE;
+  --lp-success-bg: #E7F8F0;
+  --lp-success-text: #126B4A;
+  --lp-warning-bg: #FFF6E7;
+  --lp-warning-text: #875600;
+  --lp-unavailable-bg: #F7F8FB;
+  --lp-unavailable-text: #576479;
+  --lp-space-1: 4px;
+  --lp-space-2: 8px;
+  --lp-space-3: 12px;
+  --lp-space-4: 16px;
+  --lp-space-6: 24px;
+  --lp-space-8: 32px;
+  --lp-radius-sm: 8px;
+  --lp-radius-md: 12px;
+  --lp-radius-lg: 16px;
+  --lp-shadow: 0 12px 34px rgba(21, 36, 83, .045), 0 2px 7px rgba(21, 36, 83, .025);
+  --lp-font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Arial, sans-serif;
+}
+
+</style>
+  <style>
+/* Content-free visual components. Slot bodies are decorative, not controls. */
+*, *::before, *::after { box-sizing: border-box; }
+html { background: var(--lp-canvas); }
+body { margin: 0; min-width: 0; background: var(--lp-canvas); color: var(--lp-ink); font: 14px/1.55 var(--lp-font); -webkit-font-smoothing: antialiased; }
+svg { display: block; }
+.lp-icon-library { position: absolute; width: 0; height: 0; overflow: hidden; }
+.lp-icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.lp-panel { background: var(--lp-surface); border: 1px solid var(--lp-border); border-radius: var(--lp-radius-lg); box-shadow: var(--lp-shadow); }
+.lp-eyebrow { color: #6478A0; font-size: 10px; font-weight: 800; letter-spacing: 1.2px; }
+.lp-title-dot { color: var(--lp-primary); }
+.lp-skeleton { display: block; background: #E9EEF6; border-radius: 5px; }
+.lp-skeleton--title { width: min(36%, 220px); height: 15px; }
+.lp-skeleton--badge { width: 78px; height: 24px; border-radius: 99px; margin-left: auto; }
+.lp-skeleton--progress { height: 7px; width: 100%; border-radius: 99px; }
+.lp-slot { border: 1px dashed #DCE4F0; border-radius: var(--lp-radius-md); background: #FAFBFE; }
+.lp-slot h3 { margin: 0 0 16px; color: #526683; font-size: 12px; font-weight: 700; }
+.lp-empty-lines { display: grid; gap: 11px; }
+.lp-empty-lines i, .lp-empty-line { display: block; height: 10px; border-radius: 5px; background: #E9EEF6; }
+.lp-empty-lines i:nth-child(2) { width: 84%; }
+.lp-empty-lines i:nth-child(3) { width: 56%; }
+.lp-skeleton-rows { display: grid; gap: 12px; }
+.lp-skeleton-rows i { display: block; height: 46px; border: 1px solid #E9EDF5; border-radius: 9px; background: linear-gradient(90deg,#F6F8FC,#EFF3F9); }
+.lp-slot--challenge { background: linear-gradient(125deg, #F4F7FF, #FAFBFF); border-color: #DAE4FA; padding: 20px; margin-top: 24px; min-height: 150px; }
+.lp-slot--challenge .lp-empty-lines { max-width: 410px; }
+.lp-slot--actions { padding: 18px 0 0; border: 0; background: transparent; margin-top: 22px; }
+.lp-actions-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.lp-actions-grid span { display: block; height: 78px; border: 1px dashed #D6DFEC; border-radius: 10px; background: #FAFBFE; }
+.lp-slot--custom { padding: 13px; margin-top: 15px; }
+.lp-empty-line { height: 14px; width: 42%; }
+.lp-slot--coach { padding: 18px; margin-top: 22px; min-height: 164px; background: #F7F9FF; border: 1px solid #DCE5FA; }
+.lp-coach-title { display: flex; align-items: center; gap: 9px; margin-bottom: 18px; }
+.lp-coach-title h3 { margin: 0; color: #3856A1; font-size: 13px; }
+.lp-coach-icon { display: grid; place-items: center; flex: none; width: 32px; height: 32px; color: white; background: var(--lp-primary); border-radius: 9px; }
+.lp-coach-icon .lp-icon { width: 16px; height: 16px; }
+.lp-slot--coach .lp-empty-lines { max-width: 460px; }
+.lp-side { padding: 23px 16px; min-height: 660px; }
+.lp-side h2 { margin: 6px 0 23px; color: #243857; letter-spacing: -.5px; font-size: 18px; }
+.lp-slot--side-heading { padding: 14px; display: grid; gap: 20px; }
+.lp-slot--side-heading .lp-skeleton--title { width: 74%; }
+.lp-slot--journey { margin-top: 16px; padding: 10px; }
+.lp-slot--context { padding: 13px; margin-top: 15px; min-height: 133px; }
+.lp-slot--context h3 { margin-bottom: 16px; }
+.lp-slot--context .lp-empty-lines { gap: 14px; }
+
+</style>
+  <style>
+/* Hybrid VLearn-inspired shell + LabPath split layout; drawer shapes are static UI previews. */
+.lp-app-shell { min-height: 100vh; }
+.lp-topbar { background: white; border-bottom: 1px solid #E4E9F1; }
+.lp-topbar-inner { max-width: 1650px; margin: 0 auto; height: 70px; padding: 0 clamp(16px, 3vw, 48px); display: flex; align-items: center; gap: clamp(24px, 4vw, 66px); }
+.lp-brand { flex: none; display: inline-flex; align-items: center; gap: 8px; color: #274A7F; font-size: 22px; font-weight: 800; letter-spacing: -1.1px; line-height: 1; }
+.lp-brand-word > span { color: #B23A45; }
+.lp-brand-mark { width: 29px; height: 30px; position: relative; display: inline-block; background: #31588F; clip-path: polygon(0 0,50% 42%,100% 0,100% 40%,50% 100%,0 40%); }
+.lp-brand-mark > span { position: absolute; inset: 9px 6px 10px; background: #DBE8FF; clip-path: polygon(0 0,50% 52%,100% 0,100% 35%,50% 100%,0 35%); }
+.lp-host-nav { height: 100%; display: flex; align-items: stretch; gap: clamp(16px, 2.8vw, 35px); }
+.lp-host-item { display: inline-flex; align-items: center; gap: 8px; color: #536075; font-size: 13px; font-weight: 650; white-space: nowrap; border-bottom: 2px solid transparent; padding-top: 2px; }
+.lp-host-item .lp-icon { width: 17px; height: 17px; }
+.lp-host-item--active { color: #2B4E94; border-bottom-color: #B53949; }
+.lp-page { max-width: 1650px; margin: 0 auto; padding: 30px clamp(16px, 3vw, 48px) 48px; }
+.lp-page-title h1 { font-size: clamp(30px, 3vw, 42px); letter-spacing: -1.5px; line-height: 1.15; margin: 7px 0 22px; color: #172A49; }
+.lp-lab-bar { min-height: 66px; display: flex; align-items: center; gap: 13px; padding: 12px 17px; margin-bottom: 16px; }
+.lp-lab-icon { display: grid; place-items: center; width: 36px; height: 36px; flex: none; color: #4263BD; background: #EEF2FF; border-radius: 9px; }
+.lp-workspace { display: grid; grid-template-columns: 220px minmax(0, 1fr) 280px; grid-template-areas: "journey center context"; gap: 16px; align-items: start; }
+.lp-center { grid-area: center; padding: 25px; min-width: 0; min-height: 660px; }
+.lp-panel-heading h2 { font-size: 25px; letter-spacing: -.8px; margin: 4px 0 0; color: #1E3154; }
+.lp-journey { grid-area: journey; min-width: 0; }
+.lp-context { grid-area: context; min-width: 0; }
+.lp-mobile-toolbar, .lp-drawer-previews { display: none; }
+@media (max-width: 1199px) {
+  .lp-workspace { display: block; max-width: 940px; margin: 0 auto; }
+  .lp-journey, .lp-context { display: none; }
+  .lp-mobile-toolbar { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 12px; }
+  .lp-mobile-toolbar > span { display: inline-flex; align-items: center; gap: 6px; padding: 9px 11px; border: 1px solid var(--lp-border); background: white; border-radius: 9px; color: #375584; font-size: 12px; font-weight: 700; }
+  .lp-mobile-toolbar .lp-icon { width: 15px; height: 15px; }
+  .lp-mobile-toolbar small { padding-left: 7px; color: #8A97AA; font-size: 10px; border-left: 1px solid var(--lp-border); font-weight: 400; }
+  .lp-drawer-previews { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; max-width: 940px; margin: 16px auto 0; }
+  .lp-drawer-preview { background: white; border: 1px solid var(--lp-border); border-left: 3px solid var(--lp-primary); border-radius: 12px; padding: 15px; min-width: 0; }
+  .lp-drawer-preview-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 750; color: #2C436D; margin-bottom: 14px; }
+  .lp-drawer-preview-title span { color: #8A97AA; font-size: 21px; line-height: 1; }
+  .lp-drawer-preview .lp-skeleton-rows i { height: 29px; }
+}
+@media (max-width: 767px) {
+  .lp-topbar-inner { height: 60px; gap: 16px; }
+  .lp-host-nav { margin-left: auto; }
+  .lp-host-item { display: none; }
+  .lp-host-item--active { display: inline-flex; font-size: 12px; }
+  .lp-brand { font-size: 19px; gap: 6px; }
+  .lp-brand-mark { width: 23px; height: 24px; }
+  .lp-page { padding-top: 20px; }
+  .lp-page-title h1 { margin-bottom: 17px; }
+  .lp-center { padding: 18px; min-height: 600px; }
+  .lp-panel-heading h2 { font-size: 23px; }
+  .lp-drawer-previews { grid-template-columns: 1fr; }
+}
+@media (max-width: 479px) {
+  .lp-page { padding-left: 12px; padding-right: 12px; }
+  .lp-lab-bar { padding: 10px; }
+  .lp-lab-bar .lp-skeleton--title { width: 40%; }
+  .lp-center { padding: 15px; }
+  .lp-actions-grid { grid-template-columns: 1fr; }
+  .lp-actions-grid span { height: 52px; }
+  .lp-mobile-toolbar small { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+</style>
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" class="lp-icon-library" aria-hidden="true" focusable="false">
+    <symbol id="lp-i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="lp-i-book" viewBox="0 0 24 24"><path d="M12 6c-2.3-1.6-5.2-2-9-1v14c3.8-1 6.7-.6 9 1 2.3-1.6 5.2-2 9-1V5c-3.8-1-6.7-.6-9 1Zm0 0v14"/></symbol>
+    <symbol id="lp-i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.8 8.2-2.4 5.2-5.2 2.4 2.4-5.2 5.2-2.4Z"/></symbol>
+    <symbol id="lp-i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></symbol>
+    <symbol id="lp-i-route" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="19" r="2"/><path d="M6 7v8a4 4 0 0 0 4 4h6M14 5h5m-2.5-2.5L19 5l-2.5 2.5"/></symbol>
+    <symbol id="lp-i-file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm8 0v6h5M8 13h8M8 17h6"/></symbol>
+    <symbol id="lp-i-sparkle" viewBox="0 0 24 24"><path d="m12 2 2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3L12 2Z"/></symbol>
+  </svg>
+
+  <div class="lp-app-shell">
+    <header class="lp-topbar">
+      <div class="lp-topbar-inner">
+        <div class="lp-brand" aria-label="VLearn — nhận diện minh họa">
+          <span class="lp-brand-mark" aria-hidden="true"><span></span></span>
+          <span class="lp-brand-word"><span>V</span>Learn</span>
+        </div>
+        <nav class="lp-host-nav" aria-label="Điều hướng bố cục">
+          <span class="lp-host-item"><svg class="lp-icon" aria-hidden="true"><use href="#lp-i-grid"/></svg>Home</span>
+          <span class="lp-host-item"><svg class="lp-icon" aria-hidden="true"><use href="#lp-i-book"/></svg>Courses</span>
+          <span class="lp-host-item lp-host-item--active" aria-current="page"><svg class="lp-icon" aria-hidden="true"><use href="#lp-i-compass"/></svg>Practice</span>
+          <span class="lp-host-item"><svg class="lp-icon" aria-hidden="true"><use href="#lp-i-layers"/></svg>Lab</span>
+        </nav>
+      </div>
+    </header>
+
+    <div class="lp-page">
+      <div class="lp-page-title">
+        <div class="lp-eyebrow">PRACTICE / LABPATH</div>
+        <h1>Lab Simulator<span class="lp-title-dot" aria-hidden="true">.</span></h1>
+      </div>
+
+      <div class="lp-lab-bar lp-panel" data-slot="lab-header" aria-label="Vị trí thông tin bài lab">
+        <span class="lp-lab-icon"><svg class="lp-icon" aria-hidden="true"><use href="#lp-i-layers"/></svg></span>
+        <span class="lp-skeleton lp-skeleton--title" aria-hidden="true"></span>
+        <span class="lp-skeleton lp-skeleton--badge" aria-hidden="true"></span>
+      </div>
+
+      <div class="lp-mobile-toolbar" aria-label="Vị trí điều khiển drawer — chưa triển khai">
+        <span><svg class="lp-icon" aria-hidden="true"><use href="#lp-i-route"/></svg>Learning Journey <small>Drawer slot</small></span>
+        <span><svg class="lp-icon" aria-hidden="true"><use href="#lp-i-book"/></svg>Context <small>Drawer slot</small></span>
+      </div>
+
+      <div class="lp-workspace">
+        <main id="lp-main" class="lp-panel lp-center">
+          <section id="lp-decision" aria-labelledby="lp-decision-heading">
+            <div class="lp-panel-heading">
+              <div class="lp-eyebrow">WORKSPACE</div>
+              <h2 id="lp-decision-heading">Decision Workspace</h2>
+            </div>
+            <section class="lp-slot lp-slot--challenge" data-slot="challenge" aria-labelledby="lp-challenge-heading">
+              <h3 id="lp-challenge-heading">Challenge</h3>
+              <div class="lp-empty-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+            </section>
+            <section class="lp-slot lp-slot--actions" data-slot="actions" aria-labelledby="lp-actions-heading">
+              <h3 id="lp-actions-heading">Actions</h3>
+              <div class="lp-actions-grid" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+            </section>
+            <section class="lp-slot lp-slot--custom" data-slot="custom-action" aria-label="Vị trí hành động tự nhập">
+              <div class="lp-empty-line" aria-hidden="true"></div>
+            </section>
+            <section class="lp-slot lp-slot--coach" data-slot="ai-coach" aria-labelledby="lp-coach-heading">
+              <div class="lp-coach-title"><span class="lp-coach-icon"><svg class="lp-icon" aria-hidden="true"><use href="#lp-i-sparkle"/></svg></span><h3 id="lp-coach-heading">AI Coach</h3></div>
+              <div class="lp-empty-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+            </section>
+          </section>
+        </main>
+
+        <aside id="lp-journey" class="lp-panel lp-side lp-journey" aria-labelledby="lp-journey-heading">
+          <div class="lp-eyebrow">WORKSPACE / LEFT</div>
+          <h2 id="lp-journey-heading">Learning Journey</h2>
+          <div class="lp-slot lp-slot--side-heading" data-slot="journey-header" aria-label="Vị trí tiêu đề và tiến độ">
+            <span class="lp-skeleton lp-skeleton--title" aria-hidden="true"></span>
+            <span class="lp-skeleton lp-skeleton--progress" aria-hidden="true"></span>
+          </div>
+          <div class="lp-slot lp-slot--journey" data-slot="journey-stages" aria-label="Vị trí các chặng hành trình">
+            <div class="lp-skeleton-rows" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          </div>
+        </aside>
+
+        <aside id="lp-context" class="lp-panel lp-side lp-context" aria-labelledby="lp-context-heading">
+          <div class="lp-eyebrow">WORKSPACE / RIGHT</div>
+          <h2 id="lp-context-heading">Context Panel</h2>
+          <section class="lp-slot lp-slot--context" data-slot="prerequisites" aria-labelledby="lp-prerequisites-heading">
+            <h3 id="lp-prerequisites-heading">Prerequisites</h3>
+            <div class="lp-empty-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+          </section>
+          <section class="lp-slot lp-slot--context" data-slot="sources" aria-labelledby="lp-sources-heading">
+            <h3 id="lp-sources-heading">Sources</h3>
+            <div class="lp-empty-lines" aria-hidden="true"><i></i><i></i></div>
+          </section>
+          <section class="lp-slot lp-slot--context" data-slot="history" aria-labelledby="lp-history-heading">
+            <h3 id="lp-history-heading">History</h3>
+            <div class="lp-empty-lines" aria-hidden="true"><i></i><i></i></div>
+          </section>
+        </aside>
+      </div>
+
+      <section class="lp-drawer-previews" aria-label="Bố cục drawer khi màn hình nhỏ">
+        <div class="lp-drawer-preview" data-slot="drawer-journey" aria-label="Learning Journey drawer slot">
+          <div class="lp-drawer-preview-title">Learning Journey <span aria-hidden="true">×</span></div>
+          <div class="lp-skeleton-rows" aria-hidden="true"><i></i><i></i><i></i></div>
+        </div>
+        <div class="lp-drawer-preview" data-slot="drawer-context" aria-label="Context drawer slot">
+          <div class="lp-drawer-preview-title">Context Panel <span aria-hidden="true">×</span></div>
+          <div class="lp-skeleton-rows" aria-hidden="true"><i></i><i></i><i></i></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
