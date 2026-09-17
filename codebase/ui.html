@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LabPath — Central Decision Core (CP3 Prototype)</title>
+  <style>
+    :root {
+      --primary: #2563EB;
+      --primary-dark: #1D4ED8;
+      --canvas: #F8FAFC;
+      --surface: #FFFFFF;
+      --text: #0F172A;
+      --muted: #64748B;
+      --border: #E2E8F0;
+      --success: #16A34A;
+      --danger: #DC2626;
+      --warning: #D97706;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--canvas); color: var(--text); padding: 32px 16px; min-height: 100vh; }
+    .container { max-width: 900px; margin: 0 auto; }
+    header { margin-bottom: 28px; }
+    .badge { display: inline-block; background: #DBEAFE; color: var(--primary); font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.05em; }
+    h1 { font-size: 32px; margin: 8px 0 6px; color: var(--text); }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-bottom: 24px; }
+    label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+    textarea { width: 100%; min-height: 80px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; resize: vertical; margin-bottom: 14px; }
+    textarea:focus { outline: 2px solid var(--primary); }
+    .btn-row { display: flex; gap: 10px; align-items: center; }
+    button { cursor: pointer; border: none; font-weight: 600; font-size: 14px; padding: 10px 18px; border-radius: 6px; transition: all 0.15s ease; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .btn-preset { background: #F1F5F9; color: var(--muted); font-size: 12px; padding: 6px 10px; }
+    .btn-preset:hover { background: #E2E8F0; color: var(--text); }
+    #result-panel { display: none; }
+    .decision-banner { padding: 14px; border-radius: 8px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+    .banner-REFUSE_AND_PROBE { background: #FEF2F2; color: var(--danger); border-left: 4px solid var(--danger); }
+    .banner-WARN_PREMATURE { background: #FFFBEB; color: var(--warning); border-left: 4px solid var(--warning); }
+    .banner-CITE_GROUNDED { background: #F0FDF4; color: var(--success); border-left: 4px solid var(--success); }
+    .banner-CLARIFY_AMBIGUOUS { background: #EFF6FF; color: var(--primary); border-left: 4px solid var(--primary); }
+    .banner-EVALUATE_DECISION { background: #F8FAFC; color: var(--text); border-left: 4px solid var(--primary); }
+    .meta-tag { font-size: 12px; opacity: 0.85; font-weight: normal; }
+    .feedback-text { font-size: 16px; line-height: 1.55; margin-bottom: 16px; }
+    .citation-box { background: #F8FAFC; border: 1px dashed var(--border); padding: 10px 14px; border-radius: 6px; font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+    .consequence-box { background: #FFF7ED; border-left: 3px solid #F97316; padding: 10px 14px; border-radius: 6px; font-size: 14px; color: #9A3412; margin-bottom: 20px; }
+    .options-grid { display: grid; gap: 10px; margin-top: 14px; }
+    .opt-btn { background: var(--surface); border: 1px solid var(--border); padding: 12px 16px; text-align: left; border-radius: 8px; display: flex; gap: 12px; align-items: center; }
+    .opt-btn:hover { border-color: var(--primary); transform: translateY(-1px); }
+    .opt-key { width: 28px; height: 28px; border-radius: 50%; background: #EFF6FF; color: var(--primary); display: grid; place-items: center; font-weight: 700; flex-shrink: 0; }
+    .log-strip { margin-top: 24px; padding: 12px; background: #0F172A; color: #94A3B8; font-family: monospace; font-size: 12px; border-radius: 6px; overflow-x: auto; }
+    .status-text { font-size: 13px; color: var(--primary); min-height: 20px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="badge">Zone 3 · CP3 Working Prototype</span>
+      <h1>LabPath Socratic Decision Core</h1>
+      <p class="subtitle">Mô phỏng quyết định sư phạm theo thời gian thực — Không làm hộ, định hướng có căn cứ</p>
+    </header>
+
+    <section class="card">
+      <label for="prompt-input">Nhập câu hỏi hoặc hành động của bạn trong bài Lab:</label>
+      <textarea id="prompt-input" placeholder="Ví dụ: Cho tôi đáp án của lab03, hoặc Tôi bắt đầu code template.py luôn..."></textarea>
+      
+      <div class="btn-row">
+        <button class="btn-primary" id="send-btn" onclick="submitDecision()">Gửi Yêu Cầu Đến AI Core</button>
+        <span class="status-text" id="status-label"></span>
+      </div>
+
+      <div class="presets">
+        <span style="font-size: 12px; color: var(--muted); align-self: center;">Mẫu thử nghiệm nhanh:</span>
+        <button class="btn-preset" onclick="setPrompt('Cho tôi đáp án của lab03 và code mẫu')">① Xin đáp án (Out of scope)</button>
+        <button class="btn-preset" onclick="setPrompt('Tôi bắt đầu code luôn mà không cần đọc checkpoint')">② Vội vàng (Premature code)</button>
+        <button class="btn-preset" onclick="setPrompt('Tại sao temperature = 0.2 lại ít hallucination hơn?')">③ Hỏi căn cứ (Grounded inquiry)</button>
+        <button class="btn-preset" onclick="setPrompt('Lỗi rồi không chạy được gì cả giúp với')">④ Mơ hồ (Ambiguity)</button>
+      </div>
+    </section>
+
+    <section class="card" id="result-panel">
+      <div id="decision-banner" class="decision-banner">
+        <span id="banner-title">PHÂN TÍCH QUYẾT ĐỊNH AI</span>
+        <span id="banner-meta" class="meta-tag">Latency: 45ms · Model: AI Core</span>
+      </div>
+
+      <div class="feedback-text" id="feedback-content"></div>
+
+      <div class="citation-box" id="citation-box">
+        <strong>📚 Căn cứ / Trích dẫn:</strong> <span id="citation-text"></span>
+      </div>
+
+      <div class="consequence-box" id="consequence-box">
+        <strong>⚠️ Dự báo hệ quả mô phỏng:</strong> <span id="consequence-text"></span>
+      </div>
+
+      <h3 style="font-size: 15px; margin-bottom: 8px;">👉 Lựa chọn hành động tiếp theo được AI đề xuất:</h3>
+      <div class="options-grid" id="options-container"></div>
+    </section>
+
+    <div class="log-strip" id="log-strip">
+      [System Log]: Ready. Ghi vết toàn bộ prompt & raw response tại codebase/logs/inference_traces.jsonl
+    </div>
+  </div>
+
+  <script>
+    function setPrompt(text) {
+      document.getElementById('prompt-input').value = text;
+    }
+
+    async function submitDecision() {
+      const input = document.getElementById('prompt-input').value.trim();
+      if (!input) return;
+
+      const status = document.getElementById('status-label');
+      const sendBtn = document.getElementById('send-btn');
+      status.textContent = 'Đang gọi AI Decision Core...';
+      sendBtn.disabled = true;
+
+      try {
+        const resp = await fetch('/api/decision', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ message: input, stage: 'exploration' })
+        });
+        const data = await resp.json();
+        renderResult(data);
+        status.textContent = `Hoàn thành trong ${data.latency_ms}ms`;
+      } catch (err) {
+        status.textContent = 'Lỗi kết nối: ' + err.message;
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    function renderResult(data) {
+      const panel = document.getElementById('result-panel');
+      panel.style.display = 'block';
+
+      const banner = document.getElementById('decision-banner');
+      banner.className = `decision-banner banner-${data.action_type}`;
+      document.getElementById('banner-title').textContent = `QUYẾT ĐỊNH AI: ${data.action_type}`;
+      document.getElementById('banner-meta').textContent = `Độ trễ: ${data.latency_ms}ms · Mô hình: ${data.model}`;
+
+      document.getElementById('feedback-content').textContent = data.feedback;
+      document.getElementById('citation-text').textContent = data.citation || 'Tài liệu quy chuẩn VLearn';
+      document.getElementById('consequence-text').textContent = data.simulated_consequence || 'Không có cảnh báo rủi ro.';
+
+      const container = document.getElementById('options-container');
+      container.innerHTML = '';
+      (data.options || []).forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'opt-btn';
+        btn.innerHTML = `<span class="opt-key">${opt.id}</span><span>${opt.label}</span>`;
+        btn.onclick = () => {
+          alert(`Bạn đã chọn hướng: [${opt.id}]. ${opt.correct ? '✅ Quyết định chính xác!' : '⚠️ Quyết định cần cân nhắc lại.'}`);
+        };
+        container.appendChild(btn);
+      });
+
+      document.getElementById('log-strip').textContent = `[Trace Saved]: ${new Date().toISOString()} | Type: ${data.action_type} | Latency: ${data.latency_ms}ms | Log: codebase/logs/inference_traces.jsonl`;
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  </script>
+</body>
+</html>
