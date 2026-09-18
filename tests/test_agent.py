@@ -1,7 +1,7 @@
 import json
+import sys
 import tempfile
 import unittest
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -9,7 +9,14 @@ SRC_PATH = REPO_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from labsim.agent import LabSimAgent, ToolRegistry
+from labsim.agent import (
+    LabSimAgent,
+    ToolRegistry,
+    get_chunk_by_id,
+    get_manifest_file_outline,
+    load_chunk_index,
+    search_sources,
+)
 
 
 class DummyLLMClient:
@@ -19,7 +26,6 @@ class DummyLLMClient:
     def chat_completion(self, messages, tools=None):
         self.call_count += 1
         if self.call_count == 1:
-            # First turn: call search_sources tool
             return {
                 "role": "assistant",
                 "content": None,
@@ -34,7 +40,6 @@ class DummyLLMClient:
                 ]
             }
         else:
-            # Second turn: produce final grounded answer
             return {
                 "role": "assistant",
                 "content": "Found academic_query in src/tools.py at lines 1-10.",
@@ -42,13 +47,12 @@ class DummyLLMClient:
             }
 
 
-class TestAgent(unittest.TestCase):
+class TestAgentAndRetrieval(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self.tmp_dir.name)
 
-        # Create dummy artifacts
-        chunks = [
+        self.chunks = [
             {
                 "chunk_id": "src/tools.py:1-40",
                 "lab_id": "day03",
@@ -59,9 +63,20 @@ class TestAgent(unittest.TestCase):
                 "file_sha256": "fh1",
                 "text": "def academic_query(student_id: str): pass",
                 "source_kind": "code"
+            },
+            {
+                "chunk_id": "docs/CODELAB.md:1-40",
+                "lab_id": "day03",
+                "path": "docs/CODELAB.md",
+                "start_line": 1,
+                "end_line": 40,
+                "sha256": "h2",
+                "file_sha256": "fh2",
+                "text": "Task 1.1: Setup academic tools and test queries.",
+                "source_kind": "instruction"
             }
         ]
-        manifest = {
+        self.manifest = {
             "lab_id": "day03",
             "files": [
                 {
@@ -75,15 +90,31 @@ class TestAgent(unittest.TestCase):
                 }
             ]
         }
-        (self.tmp_path / "source_chunks.jsonl").write_text(
-            "\n".join(json.dumps(c) for c in chunks), encoding="utf-8"
-        )
-        (self.tmp_path / "source_manifest.json").write_text(
-            json.dumps(manifest), encoding="utf-8"
-        )
+        self.chunks_path = self.tmp_path / "source_chunks.jsonl"
+        self.chunks_path.write_text("\n".join(json.dumps(c) for c in self.chunks), encoding="utf-8")
+        self.manifest_path = self.tmp_path / "source_manifest.json"
+        self.manifest_path.write_text(json.dumps(self.manifest), encoding="utf-8")
 
     def tearDown(self):
         self.tmp_dir.cleanup()
+
+    def test_search_sources_ranking(self):
+        index = load_chunk_index(self.chunks_path)
+        results = search_sources(index, "day03", "academic_query", top_k=2)
+        self.assertGreater(len(results), 0)
+        self.assertEqual(results[0]["path"], "src/tools.py")
+
+    def test_get_chunk_by_id(self):
+        index = load_chunk_index(self.chunks_path)
+        chunk = get_chunk_by_id(index, "docs/CODELAB.md:1-40")
+        self.assertIsNotNone(chunk)
+        self.assertEqual(chunk["path"], "docs/CODELAB.md")
+
+    def test_get_manifest_file_outline(self):
+        outline = get_manifest_file_outline(self.manifest_path, "src/tools.py")
+        self.assertIsNotNone(outline)
+        self.assertEqual(len(outline["symbols"]), 1)
+        self.assertEqual(outline["symbols"][0]["name"], "academic_query")
 
     def test_tool_registry_execution(self):
         registry = ToolRegistry(self.tmp_path, "day03")

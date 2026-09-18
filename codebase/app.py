@@ -179,15 +179,10 @@ class PrototypeWebHandler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
                 return
 
-            target = CODEBASE_DIR / "ui.html"
-            if parsed.path in ("/ui_v1.html",):
-                target = CODEBASE_DIR / "ui_v1.html"
-            elif parsed.path in ("/", "/index.html", "/ui.html"):
-                target = CODEBASE_DIR / "ui.html"
-
             if parsed.path in ("/", "/index.html", "/ui.html", "/ui_v1.html"):
+                target = CODEBASE_DIR / "ui.html"
                 if not target.exists():
-                    self.send_error(404, "HTML template not found")
+                    self.send_error(404, "HTML template ui.html not found")
                     return
                 body = target.read_text(encoding="utf-8").encode("utf-8")
                 self.send_response(200)

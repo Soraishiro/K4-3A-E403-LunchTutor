@@ -1,33 +1,124 @@
 """
-Standard AI Agent & Tool Execution Layer for Lab Simulator.
-Connects real LLM to the ingested codebase index (source_manifest.json & source_chunks.jsonl).
-Executes real tool calls to search, inspect outlines, and read chunks without hallucination.
+Unified AI Agent & Tool Execution Layer for Lab Simulator.
+Provides offline lexical retrieval, real OpenAI/Gemini tool calling,
+and interactive CLI execution without external wrappers or mock data.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
 import ssl
+import sys
 import time
 import urllib.request
-from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from labsim.retrieval import (
-    get_chunk_by_id,
-    get_manifest_file_outline,
-    list_manifest_files,
-    load_chunk_index,
-    search_sources,
-)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
-# Tool Registry & Definitions
+# Lexical Retrieval Engine
+# ---------------------------------------------------------------------------
+def load_chunk_index(chunks_path: Path) -> list[dict[str, Any]]:
+    path = Path(chunks_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Chunk index not found: {chunks_path}")
+    chunks: list[dict[str, Any]] = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                chunks.append(json.loads(line))
+    return chunks
+
+
+def tokenize(text: str) -> list[str]:
+    return re.findall(r"[a-zA-Z0-9_]+", text.lower())
+
+
+def search_sources(
+    index: list[dict[str, Any]],
+    lab_id: str,
+    query: str,
+    top_k: int = 5,
+    filter_kind: Optional[str] = None
+) -> list[dict[str, Any]]:
+    query_clean = query.strip().lower()
+    query_tokens = set(tokenize(query_clean))
+    if not query_tokens:
+        return []
+
+    scored: list[tuple[float, str, int, dict[str, Any]]] = []
+    for chunk in index:
+        if lab_id and chunk.get("lab_id") != lab_id:
+            continue
+        if filter_kind and chunk.get("source_kind") != filter_kind:
+            continue
+
+        c_path = chunk.get("path", "")
+        c_text = chunk.get("text", "")
+        start_line = chunk.get("start_line", 0)
+
+        path_tokens = set(tokenize(c_path))
+        text_tokens = tokenize(c_text)
+
+        score = 0.0
+        if query_clean in c_text.lower():
+            score += 25.0
+        if query_clean in c_path.lower():
+            score += 30.0
+
+        score += len(query_tokens.intersection(path_tokens)) * 15.0
+        score += len(query_tokens.intersection(set(text_tokens))) * 5.0
+        for t in query_tokens:
+            score += min(text_tokens.count(t), 5) * 1.0
+
+        if score > 0.0:
+            scored.append((score, c_path, start_line, chunk))
+
+    scored.sort(key=lambda x: (-x[0], x[1], x[2]))
+    return [x[3] for x in scored[:top_k]]
+
+
+def get_chunk_by_id(index: list[dict[str, Any]], chunk_id: str) -> Optional[dict[str, Any]]:
+    for chunk in index:
+        if chunk.get("chunk_id") == chunk_id:
+            return chunk
+    return None
+
+
+def get_manifest_file_outline(manifest_path: Path, file_path: str) -> Optional[dict[str, Any]]:
+    path = Path(manifest_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Manifest not found: {manifest_path}")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    norm = file_path.replace("\\", "/").strip().lstrip("/")
+    for f in data.get("files", []):
+        if f.get("path") == norm:
+            return f
+    return None
+
+
+def list_manifest_files(manifest_path: Path, filter_kind: Optional[str] = None) -> list[dict[str, Any]]:
+    path = Path(manifest_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Manifest not found: {manifest_path}")
+    files = json.loads(path.read_text(encoding="utf-8")).get("files", [])
+    if filter_kind:
+        files = [f for f in files if f.get("source_kind") == filter_kind]
+    return files
+
+
+# ---------------------------------------------------------------------------
+# Tool Registry & Schemas
 # ---------------------------------------------------------------------------
 class ToolRegistry:
     def __init__(self, generated_dir: Path, lab_id: str = "day03"):
@@ -44,23 +135,20 @@ class ToolRegistry:
         return self._chunks_cache
 
     def search_sources(self, query: str, top_k: int = 5, filter_kind: Optional[str] = None) -> list[dict[str, Any]]:
-        """Search ingested code and document chunks by keyword/phrase."""
-        raw_results = search_sources(self.chunks, self.lab_id, query, top_k=top_k, filter_kind=filter_kind)
-        # Project concise evidence
-        projected = []
-        for r in raw_results:
-            projected.append({
+        raw = search_sources(self.chunks, self.lab_id, query, top_k=top_k, filter_kind=filter_kind)
+        return [
+            {
                 "chunk_id": r.get("chunk_id"),
                 "path": r.get("path"),
                 "start_line": r.get("start_line"),
                 "end_line": r.get("end_line"),
                 "source_kind": r.get("source_kind"),
                 "text_snippet": r.get("text", "")[:300] + ("..." if len(r.get("text", "")) > 300 else ""),
-            })
-        return projected
+            }
+            for r in raw
+        ]
 
     def read_source_chunk(self, chunk_id: str) -> dict[str, Any]:
-        """Read the exact text and hash of a chunk by chunk_id."""
         chunk = get_chunk_by_id(self.chunks, chunk_id)
         if not chunk:
             return {"error": f"Chunk not found: {chunk_id}"}
@@ -75,7 +163,6 @@ class ToolRegistry:
         }
 
     def get_file_outline(self, path: str) -> dict[str, Any]:
-        """Get the AST symbol structure (functions, classes) and line counts of an indexed file."""
         outline = get_manifest_file_outline(self.manifest_path, path)
         if not outline:
             return {"error": f"File not found in manifest: {path}"}
@@ -88,7 +175,6 @@ class ToolRegistry:
         }
 
     def list_indexed_files(self, filter_kind: Optional[str] = None) -> list[dict[str, Any]]:
-        """List all indexed files and their classifications."""
         files = list_manifest_files(self.manifest_path, filter_kind=filter_kind)
         return [
             {
@@ -101,7 +187,6 @@ class ToolRegistry:
         ]
 
     def execute(self, tool_name: str, arguments: dict[str, Any]) -> Any:
-        """Dispatch tool call."""
         if tool_name == "search_sources":
             return self.search_sources(
                 query=arguments.get("query", ""),
@@ -114,11 +199,9 @@ class ToolRegistry:
             return self.get_file_outline(path=arguments.get("path", ""))
         elif tool_name == "list_indexed_files":
             return self.list_indexed_files(filter_kind=arguments.get("filter_kind"))
-        else:
-            return {"error": f"Unknown tool: {tool_name}"}
+        return {"error": f"Unknown tool: {tool_name}"}
 
     def get_tools_schema_openai(self) -> list[dict[str, Any]]:
-        """Return OpenAI-compatible function calling schemas."""
         return [
             {
                 "type": "function",
@@ -130,11 +213,7 @@ class ToolRegistry:
                         "properties": {
                             "query": {"type": "string", "description": "Search query terms"},
                             "top_k": {"type": "integer", "default": 5, "description": "Number of results"},
-                            "filter_kind": {
-                                "type": "string",
-                                "enum": ["instruction", "code", "reported"],
-                                "description": "Filter by source kind"
-                            }
+                            "filter_kind": {"type": "string", "enum": ["instruction", "code", "reported"]}
                         },
                         "required": ["query"]
                     }
@@ -194,7 +273,6 @@ class LLMClient:
         self.ssl_context = ssl._create_unverified_context()
 
     def chat_completion(self, messages: list[dict[str, Any]], tools: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
-        """Send chat completion request to OpenAI API."""
         url = "https://api.openai.com/v1/chat/completions"
         payload: dict[str, Any] = {
             "model": self.model,
@@ -213,14 +291,13 @@ class LLMClient:
                 "Authorization": f"Bearer {self.api_key}",
             }
         )
-
         with urllib.request.urlopen(req, timeout=30, context=self.ssl_context) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             return data["choices"][0]["message"]
 
 
 # ---------------------------------------------------------------------------
-# LabSim Agent Core
+# Agent Core & Socratic Prompts
 # ---------------------------------------------------------------------------
 SYSTEM_PROMPT = """You are the Lab Simulator AI Coach & Evidence Navigator.
 Your mission is to guide learners through the lab codebase and codelab instructions using Socratic guidance.
@@ -234,7 +311,6 @@ STRICT OPERATING RULES:
    - search_sources: search keyword matches across all chunks.
    - read_source_chunk: read full text of a chunk.
 4. When answering the learner:
-   - Identify what they are asking.
    - Call tools to find the real evidence in the repo.
    - Provide clear, Socratic feedback with exact citations (file path and line ranges).
    - If there is a conflict or ambiguity in the lab materials (e.g. Task 2.1 in tools.py vs mcp_server.py), explicitly point out the conflict from the evidence.
@@ -247,18 +323,13 @@ class LabSimAgent:
         self.llm = llm_client
         self.trace_log_path = trace_log_path
 
-    def run(self, user_query: str, max_iterations: int = 5) -> dict[str, Any]:
-        """
-        Execute ReAct loop:
-        User Query -> LLM (calls tools) -> Execute Tools -> LLM -> Final Response.
-        """
+    def run(self, user_query: str, max_iterations: int = 6) -> dict[str, Any]:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_query}
         ]
         traces: list[dict[str, Any]] = []
         tools_schema = self.tools.get_tools_schema_openai()
-
         start_time = time.time()
 
         for iteration in range(max_iterations):
@@ -268,7 +339,6 @@ class LabSimAgent:
 
             tool_calls = assistant_msg.get("tool_calls", [])
             if not tool_calls:
-                # No more tools requested -> Final answer reached
                 total_duration_ms = round((time.time() - start_time) * 1000, 2)
                 result = {
                     "query": user_query,
@@ -280,7 +350,6 @@ class LabSimAgent:
                 self._log_trace(result)
                 return result
 
-            # Process all tool calls in this turn
             for tool_call in tool_calls:
                 call_id = tool_call["id"]
                 fn_name = tool_call["function"]["name"]
@@ -291,7 +360,6 @@ class LabSimAgent:
                     fn_args = {}
 
                 obs = self.tools.execute(fn_name, fn_args)
-
                 traces.append({
                     "iteration": iteration + 1,
                     "tool": fn_name,
@@ -299,8 +367,6 @@ class LabSimAgent:
                     "observation_summary": str(obs)[:200] + ("..." if len(str(obs)) > 200 else ""),
                     "step_latency_ms": round((time.time() - step_start) * 1000, 2)
                 })
-
-                # Append tool observation back to messages
                 messages.append({
                     "role": "tool",
                     "tool_call_id": call_id,
@@ -308,7 +374,6 @@ class LabSimAgent:
                     "content": json.dumps(obs, ensure_ascii=False)
                 })
 
-        # Max iterations reached
         total_duration_ms = round((time.time() - start_time) * 1000, 2)
         result = {
             "query": user_query,
@@ -329,3 +394,56 @@ class LabSimAgent:
         }
         with open(self.trace_log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# CLI Entrypoint (Zero extra script files)
+# ---------------------------------------------------------------------------
+def _find_api_key() -> str:
+    key = os.environ.get("OPENAI_API_KEY")
+    if key:
+        return key
+    env_path = Path("data/K4-Day03-Lab/.env")
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("OPENAI_API_KEY="):
+                val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                if val and not val.startswith("your_"):
+                    return val
+    raise ValueError("OPENAI_API_KEY not found in environment or data/K4-Day03-Lab/.env")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="LabSim AI Agent - Evidence-grounded Socratic Coach")
+    parser.add_argument("--query", "-q", type=str, help="Learner question to ask the agent")
+    parser.add_argument("--generated-dir", type=Path, default=Path("data/generated/day03"), help="Path to ingested artifacts")
+    parser.add_argument("--model", type=str, default="gpt-4o-mini", help="LLM model name")
+    args = parser.parse_args()
+
+    api_key = _find_api_key()
+    registry = ToolRegistry(args.generated_dir)
+    client = LLMClient(api_key=api_key, model=args.model)
+    log_file = args.generated_dir / "agent_traces.jsonl"
+    agent = LabSimAgent(registry, client, trace_log_path=log_file)
+
+    if args.query:
+        print(f"Learner Query: {args.query}\nThinking & inspecting codebase...")
+        res = agent.run(args.query)
+        print(f"\n--- Agent Response ({res['duration_ms']}ms, {res['iterations']} turns) ---")
+        print(res["final_answer"])
+    else:
+        print("=== LabSim Interactive AI Agent (Type 'exit' to quit) ===")
+        while True:
+            try:
+                q = input("\nLearner: ").strip()
+                if not q or q.lower() in ("exit", "quit"):
+                    break
+                res = agent.run(q)
+                print(f"\nCoach: {res['final_answer']}")
+            except (KeyboardInterrupt, EOFError):
+                break
+
+
+if __name__ == "__main__":
+    main()
