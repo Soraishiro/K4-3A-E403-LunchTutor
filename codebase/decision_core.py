@@ -93,10 +93,17 @@ QUY TẮC BẮT BUỘC:
 # ---------------------------------------------------------------------------
 # Central Decision Engine
 # ---------------------------------------------------------------------------
+def _load_fallback_api_key() -> str:
+    # Gate 0 crash fix: __init__ referenced this name but it was never
+    # defined, so instantiating the engine without env keys raised NameError.
+    # No key -> offline heuristic provider (see _detect_provider).
+    return ""
+
+
 class CentralDecisionEngine:
     def __init__(self, model: str = "gpt-4o-mini", api_key: str = ""):
         self.model = model
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY") or ""
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY") or _load_fallback_api_key() or ""
         self.provider_type = self._detect_provider()
 
     def _detect_provider(self) -> str:

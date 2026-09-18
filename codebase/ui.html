@@ -186,7 +186,7 @@ svg { display: block; }
 .lp-dock-input { flex: 1; min-width: 0; padding: 8px 12px; font-size: 12.5px; font-family: inherit; border: 1.5px solid var(--lp-border); border-radius: 7px; background: #FAFBFE; }
 .lp-dock-input:focus { outline: none; border-color: var(--lp-primary); background: white; }
 
-.lp-cite-badge { display: inline-flex; align-items: center; gap: 3px; background: #EFF6FF; border: 1px solid #BFDBFE; color: #1D4ED8; font-size: 10.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; cursor: pointer; text-decoration: none; margin-top: 4px; }
+.lp-cite-badge { display: inline-flex; align-items: center; gap: 3px; background: #EFF6FF; border: 1px solid #BFDBFE; color: #1D4ED8; font: inherit; font-size: 10.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; cursor: pointer; text-decoration: none; margin-top: 4px; }
 .lp-cite-badge:hover { background: #DBEAFE; }
 
 /* 3. RIGHT PANEL: Metrics */
@@ -714,6 +714,30 @@ svg { display: block; }
                 <svg class="lp-icon" style="width:14px; height:14px;"><use href="#lp-i-send"/></svg> Gửi
               </button>
             </div>
+
+            <!-- Lab 3 Q&A Section -->
+            <div style="margin-top:12px; padding-top:12px; border-top:1px solid #E2E8F0;">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                <div style="font-size:11.5px; font-weight:700; color:#334155;">
+                  <span id="qa-provider-status" style="padding:2px 8px; border-radius:4px; background:#FEF3C7; color:#875600; font-size:10.5px; margin-right:6px;">
+                    🟡 MOCK
+                  </span>
+                  Hỏi đáp Lab 3 (RAG)
+                </div>
+              </div>
+              <div style="display:flex; gap:6px; margin-bottom:8px;">
+                <input type="text" id="qa-input" class="lp-dock-input" placeholder="Ví dụ: Cách khai báo tool schema đúng không? Cần bao nhiêu tham số?" onkeydown="if(event.key==='Enter') sendQAPrompt()" style="flex:1;">
+                <button class="lp-btn lp-btn-primary" onclick="sendQAPrompt()" style="padding:8px 14px; font-size:11.5px;">
+                  Go
+                </button>
+              </div>
+              <div id="qa-response" style="font-size:12px; line-height:1.55; color:#334155; max-height:120px; overflow-y:auto; padding:8px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:6px; display:none;">
+                <!-- Filled by JS -->
+              </div>
+              <div id="qa-citations" style="margin-top:6px; display:none;">
+                <!-- Filled by JS with citation badges -->
+              </div>
+            </div>
           </footer>
 
         </div>
@@ -795,7 +819,7 @@ svg { display: block; }
           <div class="lp-code-hash-wrap">
             <span style="font-size:10.5px; color:#64748B; font-weight:600;">SHA-256:</span>
             <code id="code-modal-hash" style="color:#4566EF; font-size:11px;">61a6200490...</code>
-            <span style="color:#15803D; font-size:10.5px; font-weight:700;">✓ Khớp</span>
+            <span id="code-modal-verify" style="color:#15803D; font-size:10.5px; font-weight:700;">✓ Khớp</span>
           </div>
           <!-- Symbol Jump Dropdown -->
           <div id="code-symbol-wrap" style="display:none; align-items:center; gap:4px;">
@@ -1040,6 +1064,11 @@ svg { display: block; }
       pairpal: [{ role: "ai", text: "Ủa bạn ơi, sao không viết mô tả tool bằng văn bản bình thường trong prompt mà phải khai báo JSON Schema rườm rà vậy?" }]
     };
 
+    // Gate 0: client-side mirror of the backend publish allowlist
+    // (codebase/app.py ALLOWLIST_PUBLIC_PATHS). Offline fallbacks and file
+    // lists are gated through this set. Keep in sync (see tests/test_gate0_ui.py).
+    const PUBLISH_ALLOWLIST = new Set(["LAB-GUIDE.md", "README.md", "config/test_cases.json", "docs/CODELAB.md", "docs/DANH_SACH_DE_TAI.md", "docs/SO_TAY_THUC_HANH.md", "docs/trace_eval.md", "docs/trace_waterfall.json", "requirements.txt", "src/ai_levels/README.md", "src/ai_levels/level3_native_mcp_agent.py", "src/app.py", "src/guardrail_agent.py", "src/mcp_server.py", "src/memory/__init__.py", "src/memory/context_builder.py", "src/memory/safety_filter.py", "src/memory/tool_registry.py", "src/memory/working_memory.py", "src/prompts.py", "src/providers.py", "src/tools.py", "tests/integration/test_react_agent.py", "tests/unit/test_mcp_server.py", "tests/unit/test_tools.py"]);
+
     /* Responsive Mobile View Switching */
     function setMobileView(view) {
       document.getElementById("workspace-grid").setAttribute("data-mobile-view", view);
@@ -1067,10 +1096,6 @@ svg { display: block; }
         if (bIcon) bIcon.textContent = "◀";
         if (bText) bText.textContent = "THU GỌN PANEL";
       }
-    } else {
-        grid.classList.remove("left-collapsed");
-        btn.textContent = "◀";
-      }
     }
 
     
@@ -1091,26 +1116,25 @@ svg { display: block; }
       document.getElementById("round-indicator").textContent = r.indicator;
       document.getElementById("round-title").textContent = r.title;
       document.getElementById("round-desc").innerHTML = r.desc;
-      document.getElementById("round-objs").innerHTML = r.objs.map(o => `<li>${o}</li>`).join("");
+      const objsEl = document.getElementById("round-objs");
+      objsEl.textContent = "";
+      for (const o of (r.objs || [])) objsEl.appendChild(el("li", "", o));
 
       // Render Action Cards
       const grid = document.getElementById("actions-grid");
-      grid.innerHTML = "";
-      r.options.forEach(opt => {
-        const card = document.createElement("div");
-        card.className = "lp-action-card";
-        card.id = `opt-${opt.id}`;
-        card.onclick = () => selectCard(opt);
-        card.innerHTML = `
-          <div class="lp-action-header">
-            <span class="lp-action-key">${opt.id}</span>
-            <span class="lp-badge-tag lp-badge--${opt.type}">${opt.badge}</span>
-          </div>
-          <h4 class="lp-action-title">${opt.title}</h4>
-          <p class="lp-action-desc">${opt.desc}</p>
-        `;
+      grid.textContent = "";
+      for (const opt of r.options) {
+        const card = el("div", "lp-action-card", "");
+        card.id = "opt-" + opt.id;
+        card.addEventListener("click", () => selectCard(opt));
+        const head = el("div", "lp-action-header", "");
+        head.appendChild(el("span", "lp-action-key", opt.id));
+        head.appendChild(el("span", "lp-badge-tag lp-badge--" + opt.type, opt.badge));
+        card.appendChild(head);
+        card.appendChild(el("h4", "lp-action-title", opt.title));
+        card.appendChild(el("p", "lp-action-desc", opt.desc));
         grid.appendChild(card);
-      });
+      }
 
       document.getElementById("custom-rationale").value = "";
       document.getElementById("feedback-banner").style.display = "none";
@@ -1145,16 +1169,14 @@ svg { display: block; }
 
       if (opt.correct) {
         banner.className = "lp-feedback-banner lp-feedback--pass";
-        document.getElementById("feedback-title").innerHTML = "✅ LỰA CHỌN RẤT TỐT (ĐẠT YÊU CẦU)";
-        document.getElementById("feedback-text").innerHTML = `
-          Phương án [${opt.id}] chính xác theo chuẩn Day 03: Đảm bảo khả năng suy luận đa bước, chi phí thấp ($${opt.cost}/câu), phản hồi nhanh (~${opt.lat}ms) và tỷ lệ ảo giác = ${opt.hall}%.
-        `;
+        document.getElementById("feedback-title").textContent = "✅ LỰA CHỌN RẤT TỐT (ĐẠT YÊU CẦU)";
+        document.getElementById("feedback-text").textContent =
+          `Phương án [${opt.id}] chính xác theo chuẩn Day 03: Đảm bảo khả năng suy luận đa bước, chi phí thấp ($${opt.cost}/câu), phản hồi nhanh (~${opt.lat}ms) và tỷ lệ ảo giác = ${opt.hall}%.`;
       } else {
         banner.className = "lp-feedback-banner lp-feedback--warn";
-        document.getElementById("feedback-title").innerHTML = "⚠️ CẦN LƯU Ý (CHƯA TỐI ƯU)";
-        document.getElementById("feedback-text").innerHTML = `
-          Phương án [${opt.id}] gặp lỗi kiến trúc: Dẫn đến nguy cơ Truncated Loop hoặc lỗ hổng bảo mật học vụ. Vui lòng đối chiếu mã nguồn và tài liệu bên trái hoặc hỏi Mentor.
-        `;
+        document.getElementById("feedback-title").textContent = "⚠️ CẦN LƯU Ý (CHƯA TỐI ƯU)";
+        document.getElementById("feedback-text").textContent =
+          `Phương án [${opt.id}] gặp lỗi kiến trúc: Dẫn đến nguy cơ Truncated Loop hoặc lỗ hổng bảo mật học vụ. Vui lòng đối chiếu mã nguồn và tài liệu bên trái hoặc hỏi Mentor.`;
       }
 
       // Update Right Scorecard
@@ -1166,18 +1188,31 @@ svg { display: block; }
       document.getElementById("radar-teach").textContent = opt.correct ? "90 / 100" : "45 / 100";
 
       // Banner Pills
-      document.getElementById("metrics-strip").innerHTML = `
-        <span class="lp-pill">🎯 Độ chính xác: ${opt.acc}%</span>
-        <span class="lp-pill">💰 Chi phí: $${opt.cost}</span>
-        <span class="lp-pill">⚡ Tốc độ: ${opt.lat}ms</span>
-        <span class="lp-pill">🛡️ Ảo giác: ${opt.hall}%</span>
-      `;
+      const strip = document.getElementById("metrics-strip");
+      strip.textContent = "";
+      for (const t of [`🎯 Độ chính xác: ${opt.acc}%`, `💰 Chi phí: $${opt.cost}`, `⚡ Tốc độ: ${opt.lat}ms`, `🛡️ Ảo giác: ${opt.hall}%`]) {
+        strip.appendChild(el("span", "lp-pill", t));
+      }
 
       // Log history
-      historyEntries.push(`Vòng ${r.idx}: [${opt.id}] · ${opt.correct ? '✅ Đạt' : '⚠️ Cần sửa'} (${opt.acc}%)`);
-      document.getElementById("history-log").innerHTML = historyEntries.map(e => `<div class="lp-log-entry">${e}</div>`).join("");
+      historyEntries.push({ round: r.idx, id: opt.id, ok: !!opt.correct, acc: opt.acc });
+      renderHistory();
 
       banner.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function renderHistory() {
+      const log = document.getElementById("history-log");
+      log.textContent = "";
+      if (!historyEntries.length) {
+        const s = el("span", "", "Chưa nộp bài lần nào.");
+        s.style.color = "var(--lp-muted)";
+        log.appendChild(s);
+        return;
+      }
+      for (const e of historyEntries) {
+        log.appendChild(el("div", "lp-log-entry", `Vòng ${e.round}: [${e.id}] · ${e.ok ? "✅ Đạt" : "⚠️ Cần sửa"} (${e.acc}%)`));
+      }
     }
 
     function nextRound() {
@@ -1192,7 +1227,7 @@ svg { display: block; }
     function resetSim() {
       if (confirm("Làm lại bài lab từ Vòng 1?")) {
         historyEntries = [];
-        document.getElementById("history-log").innerHTML = '<span style="color:var(--lp-muted);">Chưa nộp bài lần nào.</span>';
+        renderHistory();
         loadRound(0);
       }
     }
@@ -1207,32 +1242,83 @@ svg { display: block; }
       renderChips();
     }
 
+    // Safe DOM helpers (Gate 0): every untrusted string (user input, model
+    // output, manifest paths/symbols, tool results) goes through textContent.
+    // No dynamic value is ever interpolated into innerHTML or inline onclick.
+    function el(tag, cls, text) {
+      const n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text !== undefined && text !== null) n.textContent = String(text);
+      return n;
+    }
+
+    function evIcon(kind) {
+      return kind === "code" ? "💻" : (kind === "instruction" ? "📘" : "🧪");
+    }
+
+    // Open a citation/evidence reference. Only allowlisted paths navigate;
+    // anything else is ignored (citation stays visible as plain text).
+    function openEvidence(path, line) {
+      if (typeof path !== "string" || !PUBLISH_ALLOWLIST.has(path)) return;
+      const ln = (typeof line === "number" && line > 0) ? line : 1;
+      inspectFile(path, ln, "");
+    }
+
+    function removeTyping() {
+      const t = document.getElementById("typing-bubble");
+      if (t) t.remove();
+    }
+
+    // Chat entries: { role: "user"|"ai"|"status", text, notes?, badges? }
+    // notes: [{ label, text }], badges: [{ label, title, path, line }]
     function renderChat() {
       const container = document.getElementById("chat-messages");
+      container.textContent = "";
       const msgs = chatHistory[coachTab] || [];
-      container.innerHTML = msgs.map(m => {
+      for (const m of msgs) {
         const isUser = m.role === "user";
-        const sender = isUser ? "Bạn" : (coachTab === "mentor" ? "Mentor 🎓" : "Bạn học (PairPal) 🧑‍🤝‍🧑");
-        return `
-          <div class="lp-chat-bubble ${isUser ? 'lp-bubble-user' : 'lp-bubble-ai'}">
-            <strong>${sender}:</strong> ${m.text}
-          </div>
-        `;
-      }).join("");
+        const bubble = el("div", "lp-chat-bubble " + (isUser ? "lp-bubble-user" : "lp-bubble-ai"));
+        if (m.role === "status") {
+          bubble.appendChild(el("strong", "", "Hệ thống: "));
+          bubble.appendChild(el("em", "", m.text || ""));
+        } else {
+          const sender = isUser ? "Bạn" : (coachTab === "mentor" ? "Mentor 🎓" : "Bạn học (PairPal) 🧑‍🤝‍🧑");
+          bubble.appendChild(el("strong", "", sender + ": "));
+          bubble.appendChild(el("span", "", m.text || ""));
+          for (const note of (m.notes || [])) {
+            const nd = el("div", "", (note.label ? note.label + " " : "") + (note.text || ""));
+            nd.style.cssText = "display:block;margin-top:4px;font-size:11px;color:#334155;";
+            bubble.appendChild(nd);
+          }
+          for (const b of (m.badges || [])) {
+            const btn = el("button", "lp-cite-badge", b.label || "");
+            btn.type = "button";
+            if (b.title) btn.title = String(b.title);
+            btn.addEventListener("click", (ev) => {
+              ev.preventDefault();
+              openEvidence(b.path, b.line);
+            });
+            bubble.appendChild(btn);
+          }
+        }
+        container.appendChild(bubble);
+      }
       container.scrollTop = container.scrollHeight;
     }
 
     function renderChips() {
       const container = document.getElementById("chips-row");
+      container.textContent = "";
       const r = ROUNDS_DATA[currentRoundIdx];
-      container.innerHTML = (r.chips || []).map(c => `
-        <button class="lp-quick-chip" onclick="clickChip('${c}')">${c}</button>
-      `).join("");
-    }
-
-    function clickChip(text) {
-      document.getElementById("dock-input").value = text;
-      sendPrompt();
+      for (const c of (r.chips || [])) {
+        const b = el("button", "lp-quick-chip", c);
+        b.type = "button";
+        b.addEventListener("click", () => {
+          document.getElementById("dock-input").value = c;
+          sendPrompt();
+        });
+        container.appendChild(b);
+      }
     }
 
     function sendPrompt() {
@@ -1246,10 +1332,9 @@ svg { display: block; }
 
       // Typing indicator
       const container = document.getElementById("chat-messages");
-      const loadingBubble = document.createElement("div");
-      loadingBubble.className = "lp-chat-bubble lp-bubble-ai";
+      const loadingBubble = el("div", "lp-chat-bubble lp-bubble-ai", "");
       loadingBubble.id = "typing-bubble";
-      loadingBubble.innerHTML = "<em>Đang phân tích và kiểm tra căn cứ nguồn...</em>";
+      loadingBubble.appendChild(el("em", "", "Đang phân tích và kiểm tra căn cứ nguồn..."));
       container.appendChild(loadingBubble);
       container.scrollTop = container.scrollHeight;
 
@@ -1264,32 +1349,137 @@ svg { display: block; }
         return r.json();
       })
       .then(data => {
-        const el = document.getElementById("typing-bubble");
-        if (el) el.remove();
-
-        let aiText = data.feedback || "Tôi đã nhận được câu hỏi.";
+        removeTyping();
+        const notes = [];
         if (data.simulated_consequence) {
-          aiText += `<br><span style="display:inline-block; margin-top:4px; color:#B45309; font-size:11px;">⚠️ <strong>Hệ quả dự báo:</strong> ${data.simulated_consequence}</span>`;
+          notes.push({ label: "⚠️ Hệ quả dự báo:", text: String(data.simulated_consequence) });
         }
         if (data.citation) {
-          aiText += `<br><span class="lp-cite-badge" onclick="inspectFile('src/tools.py', 1, '')">🛡️ Căn cứ xác thực: ${data.citation}</span>`;
+          const ok = !!data.citation_verified;
+          notes.push({
+            label: ok ? "🛡️ Căn cứ:" : "⚠️ Căn cứ:",
+            text: String(data.citation) + (ok ? " (đã khớp file trong chỉ mục)" : " (heuristic — đối chiếu chunk bên dưới)")
+          });
         }
-
-        chatHistory[coachTab].push({ role: "ai", text: aiText });
+        const badges = (data.evidence || []).slice(0, 3).map(ev => ({
+          label: `${evIcon(ev.source_kind)} ${ev.path}:${ev.start_line}-${ev.end_line}`,
+          title: `${ev.chunk_id || ""} · SHA ${ev.sha_short || ""}`,
+          path: ev.path,
+          line: ev.start_line
+        }));
+        chatHistory[coachTab].push({
+          role: "ai",
+          text: String(data.feedback != null ? data.feedback : "Tôi đã nhận được câu hỏi."),
+          notes: notes,
+          badges: badges
+        });
         renderChat();
       })
       .catch(() => {
-        const el = document.getElementById("typing-bubble");
-        if (el) el.remove();
-
-        const r = ROUNDS_DATA[currentRoundIdx];
-        let fallbackText = (coachTab === "mentor")
-          ? r.mentorHint
-          : "À hay quá! Mình hiểu rồi, nghĩa là trong ReAct Loop phải nạp Observation vào messages để bot suy luận tiếp đúng không bạn?";
-
-        chatHistory[coachTab].push({ role: "ai", text: fallbackText });
+        removeTyping();
+        // Gate 0: never fabricate an AI reply on transport failure. Keep the
+        // learner question and let them resend.
+        chatHistory[coachTab].push({ role: "status", text: "Không thể kết nối AI — thử lại" });
         renderChat();
+        input.value = text;
+        input.focus();
       });
+    }
+
+    // Badge reflects key configuration only — never a proven live call.
+    function setProviderBadge(text, bg, fg) {
+      const badge = document.getElementById("qa-provider-status");
+      if (!badge) return;
+      badge.textContent = text;
+      badge.style.background = bg;
+      badge.style.color = fg;
+    }
+
+    async function checkProviderStatus() {
+      if (!document.getElementById("qa-provider-status")) return;
+      try {
+        const res = await fetch("/api/provider-status");
+        if (!res.ok) {
+          setProviderBadge("🟡 MOCK", "#FEF3C7", "#875600");
+          return;
+        }
+        const data = await res.json();
+        if (data.status === "mock") {
+          setProviderBadge("🟡 MOCK (cần API key)", "#FEF3C7", "#875600");
+        } else if (data.status === "live_gemini") {
+          setProviderBadge("🟢 KEY (Gemini)", "#D1FAE5", "#065F46");
+        } else if (data.status === "live_openai") {
+          setProviderBadge("🟢 KEY (OpenAI)", "#D1FAE5", "#065F46");
+        }
+      } catch (_) {
+        setProviderBadge("🟡 MOCK", "#FEF3C7", "#875600");
+      }
+    }
+
+    async function sendQAPrompt() {
+      const input = document.getElementById("qa-input");
+      const query = input.value.trim();
+      if (!query) return;
+
+      const respBox = document.getElementById("qa-response");
+      const citeBox = document.getElementById("qa-citations");
+      respBox.style.display = "block";
+      respBox.textContent = "";
+      respBox.appendChild(el("em", "", "🔄 Đang tìm kiếm và gọi LLM thật..."));
+      citeBox.style.display = "none";
+      citeBox.textContent = "";
+      input.disabled = true;
+      input.value = "";
+
+      try {
+        const res = await fetch("/api/qa", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query })
+        });
+        if (!res.ok) throw new Error("API QA error");
+        const data = await res.json();
+
+        respBox.textContent = "";
+        respBox.appendChild(el("div", "", data.answer || "Không có trả lời."));
+        const live = data.provider_status !== "mock";
+        const st = el("span", "", live
+          ? `✅ Đã nhận phản hồi (${data.model || "LLM"})`
+          : "⚠️ Chế độ Mock — cung cấp GEMINI_API_KEY hoặc OPENAI_API_KEY để dùng LLM thật");
+        st.style.cssText = "display:inline-block;margin-top:4px;font-size:11px;color:" + (live ? "#065F46" : "#875600") + ";";
+        respBox.appendChild(st);
+
+        // Verified citations: each badge opens the exact file + start line.
+        const verified = (data.citations_detail && data.citations_detail.length)
+          ? data.citations_detail
+          : (data.evidence || []).slice(0, 3);
+        if (verified && verified.length > 0) {
+          const cap = el("span", "", `Trích dẫn đã xác thực (${verified.length}/${data.retrieved_count || verified.length} chunks):`);
+          cap.style.cssText = "display:inline-block;margin-top:6px;font-size:11px;color:#64748B;";
+          respBox.appendChild(cap);
+          for (const c of verified) {
+            const ref = c.ref || `${c.path}:${c.start_line}-${c.end_line}`;
+            const b = el("button", "lp-cite-badge", `📚 ${ref} ✓`);
+            b.type = "button";
+            b.title = `${c.chunk_id || ""} · SHA ${c.sha_short || c.sha256 || ""}`;
+            const p = c.path, ln = c.start_line;
+            b.addEventListener("click", (ev) => { ev.preventDefault(); openEvidence(p, ln); });
+            respBox.appendChild(b);
+            respBox.appendChild(document.createTextNode(" "));
+          }
+        }
+
+        citeBox.style.display = "none";
+        citeBox.textContent = "";
+      } catch (err) {
+        respBox.textContent = "";
+        const e = el("span", "", "❌ Lỗi: " + (err && err.message ? err.message : "không rõ"));
+        e.style.color = "#B91C1C";
+        respBox.appendChild(e);
+      } finally {
+        input.disabled = false;
+        input.focus();
+      }
     }
 
     // Provenance Loader
@@ -1301,7 +1491,7 @@ svg { display: block; }
         })
         .then(data => {
           if (data && data.files) {
-            currentManifestFiles = data.files.map(f => ({
+            currentManifestFiles = data.files.filter(f => f && PUBLISH_ALLOWLIST.has(f.path)).map(f => ({
               p: f.path,
               cat: categorizeFile(f.path),
               k: f.source_kind || "code",
@@ -1325,36 +1515,43 @@ svg { display: block; }
     function renderProvenanceList(files) {
       const container = document.getElementById("prov-list-container");
       if (!container) return;
-      if (!files.length) {
-        container.innerHTML = '<div style="padding:16px; text-align:center; color:var(--lp-muted); font-size:12px;">Không tìm thấy file phù hợp.</div>';
+      container.textContent = "";
+      const safe = (files || []).filter(f => f && PUBLISH_ALLOWLIST.has(f.p));
+      if (!safe.length) {
+        const d = el("div", "", "Không tìm thấy file phù hợp.");
+        d.style.cssText = "padding:16px;text-align:center;color:var(--lp-muted);font-size:12px;";
+        container.appendChild(d);
         return;
       }
-      container.innerHTML = files.map(f => {
+      for (const f of safe) {
         const kindCls = f.cat === "code" ? "lp-kind--code" : (f.cat === "tests" ? "lp-kind--reported" : "lp-kind--instruction");
         const kindLabel = f.cat === "code" ? "MÃ NGUỒN" : (f.cat === "tests" ? "KIỂM THỬ" : "HƯỚNG DẪN");
-        const symHtml = (f.sym && f.sym.length)
-          ? `<div class="lp-ast-tags">${f.sym.map(s => `<span class="lp-ast-tag" onclick="event.stopPropagation(); inspectFile('${f.p}', null, '${s}')">AST: ${s}</span>`).join("")}</div>`
-          : "";
-
-        return `
-          <div class="lp-prov-card" onclick="inspectFile('${f.p}', 1, '')">
-            <div class="lp-prov-top">
-              <span class="lp-prov-name">${f.p}</span>
-              <span class="lp-kind-badge ${kindCls}">${kindLabel}</span>
-            </div>
-            <div class="lp-prov-meta">
-              <span>${f.l} dòng</span>
-              <span>SHA: ${f.h}…</span>
-            </div>
-            ${symHtml}
-          </div>
-        `;
-      }).join("");
+        const card = el("div", "lp-prov-card", "");
+        card.addEventListener("click", () => inspectFile(f.p, 1, ""));
+        const top = el("div", "lp-prov-top", "");
+        top.appendChild(el("span", "lp-prov-name", f.p));
+        top.appendChild(el("span", "lp-kind-badge " + kindCls, kindLabel));
+        card.appendChild(top);
+        const meta = el("div", "lp-prov-meta", "");
+        meta.appendChild(el("span", "", `${f.l} dòng`));
+        meta.appendChild(el("span", "", `SHA: ${f.h}…`));
+        card.appendChild(meta);
+        if (f.sym && f.sym.length) {
+          const tags = el("div", "lp-ast-tags", "");
+          for (const s of f.sym) {
+            const t = el("span", "lp-ast-tag", "AST: " + s);
+            t.addEventListener("click", (ev) => { ev.stopPropagation(); inspectFile(f.p, null, s); });
+            tags.appendChild(t);
+          }
+          card.appendChild(tags);
+        }
+        container.appendChild(card);
+      }
     }
 
     function filterProvList() {
       const q = (document.getElementById("prov-search").value || "").trim().toLowerCase();
-      let filtered = currentManifestFiles;
+      let filtered = currentManifestFiles.filter(f => f && PUBLISH_ALLOWLIST.has(f.p));
 
       if (activeProvFilter !== "all") {
         filtered = filtered.filter(f => f.cat === activeProvFilter);
@@ -1374,31 +1571,36 @@ svg { display: block; }
     // =========================================================================
     // FULL CODE & DOCUMENT INSPECTOR MODAL (SMOOTH PAGE UP / PAGE DOWN / AST)
     // =========================================================================
-    function escapeHtml(str) {
-      return str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    }
-
     function inspectFile(path, targetLine, targetSymbol) {
       const modal = document.getElementById("code-modal");
       const titleEl = document.getElementById("code-modal-title");
       const linesEl = document.getElementById("code-modal-lines");
       const hashEl = document.getElementById("code-modal-hash");
+      const verifyEl = document.getElementById("code-modal-verify");
       const kindEl = document.getElementById("code-modal-kind");
       const symWrap = document.getElementById("code-symbol-wrap");
       const symSelect = document.getElementById("code-symbol-select");
       const table = document.getElementById("code-table");
       const viewport = document.getElementById("code-viewport");
 
+      modal.style.display = "grid";
+      if (!PUBLISH_ALLOWLIST.has(path)) {
+        titleEl.textContent = String(path);
+        linesEl.textContent = "Từ chối";
+        hashEl.textContent = "—";
+        if (verifyEl) verifyEl.textContent = "⚠ chưa duyệt công bố";
+        table.textContent = "";
+        table.appendChild(el("div", "", "File chưa được duyệt công bố. Cần backend cho phép trước khi xem."));
+        return;
+      }
+
       titleEl.textContent = path;
       linesEl.textContent = "Đang nạp...";
       hashEl.textContent = "Đang xác thực...";
-      table.innerHTML = '<div style="padding:24px; color:#94A3B8; text-align:center;">Đang tải nội dung file đầy đủ từ kho bài lab...</div>';
-      modal.style.display = "grid";
+      table.textContent = "";
+      const loading = el("div", "", "Đang tải nội dung file đầy đủ từ kho bài lab...");
+      loading.style.cssText = "padding:24px;color:#94A3B8;text-align:center;";
+      table.appendChild(loading);
 
       // Tag kind
       const isCode = path.endsWith(".py");
@@ -1416,11 +1618,16 @@ svg { display: block; }
           renderFileContent(data.path, data.content, data.total_lines, data.sha256, data.symbols, targetLine, targetSymbol);
         })
         .catch(() => {
-          // Offline embedded fallback
-          const content = OFFLINE_EMBEDDED_FILES[path] || `// Không tìm thấy nội dung file ${path} trong gói dữ liệu ngoại tuyến.`;
+          // Offline embedded fallback: approved public files only, and never
+          // presented as hash-verified ("chưa xác minh").
+          if (!PUBLISH_ALLOWLIST.has(path) || !OFFLINE_EMBEDDED_FILES[path]) {
+            renderFileContent(path, "// Không có nội dung ngoại tuyến cho file này. Cần kết nối backend.", 1, "chưa xác minh", [], null, null);
+            return;
+          }
+          const content = OFFLINE_EMBEDDED_FILES[path];
           const lines = content.split('\n');
           const manifestItem = currentManifestFiles.find(f => f.p === path);
-          const hash = manifestItem ? manifestItem.full_sha : "verified-sha256";
+          const hash = manifestItem ? manifestItem.full_sha : "chưa xác minh";
           const syms = (manifestItem && manifestItem.sym) ? manifestItem.sym.map(s => ({ name: s, line: 1 })) : [];
           renderFileContent(path, content, lines.length, hash, syms, targetLine, targetSymbol);
         });
@@ -1428,24 +1635,38 @@ svg { display: block; }
 
     function renderFileContent(path, content, totalLines, sha256, symbols, targetLine, targetSymbol) {
       currentLoadedCode = content;
-      const lines = content.split('\n');
+      const lines = String(content == null ? "" : content).split('\n');
       document.getElementById("code-modal-lines").textContent = `${lines.length} dòng`;
-      document.getElementById("code-modal-hash").textContent = sha256.substring(0, 14) + "...";
+      const hashText = String(sha256 == null ? "" : sha256);
+      document.getElementById("code-modal-hash").textContent = (hashText ? hashText.substring(0, 14) : "—") + (hashText ? "..." : "");
+      const verifyEl = document.getElementById("code-modal-verify");
+      if (verifyEl) {
+        verifyEl.textContent = /^[0-9a-f]{10,}$/i.test(hashText) ? "✓ Khớp" : "⚠ chưa xác minh";
+      }
 
       // Populate Symbols
       const symWrap = document.getElementById("code-symbol-wrap");
       const symSelect = document.getElementById("code-symbol-select");
+      symSelect.textContent = "";
       if (symbols && symbols.length > 0) {
         symWrap.style.display = "inline-flex";
-        symSelect.innerHTML = '<option value="">-- Chọn hàm / class --</option>' +
-          symbols.map(s => `<option value="${s.line}">${s.kind === 'class' ? 'Class ' : 'Def '}${s.name} (dòng ${s.line})</option>`).join("");
+        const def = document.createElement("option");
+        def.value = "";
+        def.textContent = "-- Chọn hàm / class --";
+        symSelect.appendChild(def);
+        for (const s of symbols) {
+          const o = document.createElement("option");
+          o.value = String(s.line);
+          o.textContent = `${s.kind === "class" ? "Class " : "Def "}${s.name} (dòng ${s.line})`;
+          symSelect.appendChild(o);
+        }
       } else {
         symWrap.style.display = "none";
       }
 
-      // Render lines table
+      // Render lines table (line text via textContent — never HTML)
       const table = document.getElementById("code-table");
-      const htmlRows = [];
+      table.textContent = "";
       let foundTargetLine = targetLine;
 
       for (let i = 0; i < lines.length; i++) {
@@ -1458,15 +1679,12 @@ svg { display: block; }
           }
         }
 
-        htmlRows.push(`
-          <div class="lp-code-row" id="line-row-${lineNum}">
-            <div class="lp-code-num">${lineNum}</div>
-            <div class="lp-code-line">${escapeHtml(lineText) || ' '}</div>
-          </div>
-        `);
+        const row = el("div", "lp-code-row", "");
+        row.id = "line-row-" + lineNum;
+        row.appendChild(el("div", "lp-code-num", String(lineNum)));
+        row.appendChild(el("div", "lp-code-line", lineText === "" ? " " : lineText));
+        table.appendChild(row);
       }
-
-      table.innerHTML = htmlRows.join("");
 
       // Focus viewport for immediate Page Up / Page Down support
       const viewport = document.getElementById("code-viewport");
@@ -1571,14 +1789,12 @@ svg { display: block; }
       }
     }
 
-    
-    }
-
     function init() {
       loadRound(0);
       renderChat();
       renderChips();
       fetchProvenance();
+      checkProviderStatus();
     }
 
     window.addEventListener("DOMContentLoaded", init);
