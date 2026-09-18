@@ -1,0 +1,48 @@
+tools:
+  - name: search_sources
+    description: "Tìm kiếm các đoạn mã nguồn và tài liệu hướng dẫn học tập theo từ khóa hoặc cụm từ. Bắt buộc truyền query; có thể lọc theo source_kind."
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          description: "Từ khóa hoặc cụm từ cần tra cứu trong codebase và codelab"
+        top_k:
+          type: integer
+          default: 5
+          description: "Số lượng kết quả tối đa"
+        filter_kind:
+          type: string
+          enum: [instruction, code, reported]
+          description: "Lọc theo loại nguồn"
+      required: [query]
+
+  - name: read_source_chunk
+    description: "Đọc toàn bộ nội dung nguyên văn và mã băm SHA-256 của một chunk cụ thể dựa vào chunk_id (ví dụ: 'docs/CODELAB.md:1-40')."
+    parameters:
+      type: object
+      properties:
+        chunk_id:
+          type: string
+          description: "Định danh duy nhất của chunk cần đọc"
+      required: [chunk_id]
+
+  - name: get_file_outline
+    description: "Trích xuất dàn ý cấu trúc file: danh sách hàm, lớp, vị trí dòng và số dòng từ cây cú pháp AST. Hỗ trợ soi nhanh cấu trúc file code."
+    parameters:
+      type: object
+      properties:
+        path:
+          type: string
+          description: "Đường dẫn tương đối của file (ví dụ: 'src/tools.py' hoặc 'src/mcp_server.py')"
+      required: [path]
+
+  - name: list_indexed_files
+    description: "Liệt kê toàn bộ các file đã được lập chỉ mục trong bài Lab kèm số dòng, số symbols và loại nguồn."
+    parameters:
+      type: object
+      properties:
+        filter_kind:
+          type: string
+          enum: [instruction, code, reported]
+          description: "Lọc theo loại nguồn"

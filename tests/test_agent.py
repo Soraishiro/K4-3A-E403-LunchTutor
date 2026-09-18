@@ -9,8 +9,8 @@ SRC_PATH = REPO_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from labsim.agent import (
-    LabSimAgent,
+from labsim.agent import LabSimAgent
+from labsim.tools import (
     ToolRegistry,
     get_chunk_by_id,
     get_manifest_file_outline,
@@ -47,7 +47,7 @@ class DummyLLMClient:
             }
 
 
-class TestAgentAndRetrieval(unittest.TestCase):
+class TestToolsAndAgent(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self.tmp_dir.name)
