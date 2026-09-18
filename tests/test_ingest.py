@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-CODEBASE_PATH = REPO_ROOT / "codebase"
-if str(CODEBASE_PATH) not in sys.path:
-    sys.path.insert(0, str(CODEBASE_PATH))
+SRC_PATH = REPO_ROOT / "src"
+if str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
