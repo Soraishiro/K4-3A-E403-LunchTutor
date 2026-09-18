@@ -72,7 +72,7 @@ svg { display: block; }
 .lp-workspace { display: grid; grid-template-columns: 280px minmax(0, 1fr) 280px; gap: 14px; align-items: start; transition: grid-template-columns 0.2s ease; }
 .lp-workspace.left-collapsed { grid-template-columns: 46px minmax(0, 1fr) 280px; }
 
-/* 1. LEFT PANEL: Tài liệu & Lưu ý (Collapsible) */
+/* 1. LEFT PANEL: Tài liệu & Mã nguồn Lab (Collapsible) */
 .lp-docs-panel { padding: 14px; min-height: 720px; display: flex; flex-direction: column; transition: all 0.2s ease; position: relative; }
 .lp-workspace.left-collapsed .lp-docs-panel { padding: 12px 6px; align-items: center; }
 .lp-panel-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; width: 100%; }
@@ -475,7 +475,7 @@ svg { display: block; }
 
       <!-- Mobile View Switcher (Visible on small screens) -->
       <div class="lp-view-switcher">
-        <button class="lp-view-btn" id="mbtn-docs" onclick="setMobileView('docs')">📚 Căn cứ & AST</button>
+        <button class="lp-view-btn" id="mbtn-docs" onclick="setMobileView('docs')">📁 Tài liệu & Code</button>
         <button class="lp-view-btn active" id="mbtn-center" onclick="setMobileView('center')">🎯 Bài làm & Chat</button>
         <button class="lp-view-btn" id="mbtn-metrics" onclick="setMobileView('metrics')">📊 Bảng điểm</button>
       </div>
@@ -489,59 +489,20 @@ svg { display: block; }
         <aside class="lp-panel lp-docs-panel" id="left-docs-panel">
           <div class="lp-panel-top-row">
             <div class="lp-docs-content">
-              <div class="lp-eyebrow">TÀI LIỆU & CĂN CỨ THỰC TẾ</div>
-              <div class="lp-tab-pill-row">
-                <button class="lp-pill-tab active" id="tab-btn-notes" onclick="switchLeftTab('notes')">Lưu ý (4)</button>
-                <button class="lp-pill-tab" id="tab-btn-prov" onclick="switchLeftTab('prov')">Mã nguồn & AST (25)</button>
-              </div>
+              <div class="lp-eyebrow">TÀI LIỆU & MÃ NGUỒN BÀI LAB</div>
+              <h3 style="font-size:13.5px; margin:2px 0 0; color:#1E293B; font-weight:750;">Danh Sách File (24)</h3>
             </div>
             <button class="lp-collapse-btn" id="btn-toggle-left" onclick="toggleLeftPanel()" title="Thu gọn / Mở rộng">◀</button>
           </div>
 
           <!-- Vertical strip when collapsed -->
-          <div class="lp-mini-strip" onclick="toggleLeftPanel()">TÀI LIỆU & CĂN CỨ ▶</div>
+          <div class="lp-mini-strip" onclick="toggleLeftPanel()">TÀI LIỆU & CODE ▶</div>
 
           <!-- Expanded content -->
           <div class="lp-docs-content">
-            <!-- Sub-tab 1: Lưu ý bài lab Day 03 -->
-            <div id="tab-content-notes" class="lp-doc-list">
-              <div class="lp-doc-item" onclick="openDocModal('MC01')">
-                <div class="lp-doc-tag">LƯU Ý 01 · BẢN CHẤT AGENT</div>
-                <div class="lp-doc-title">Chatbot Cấp 2 vs ReAct Agent Cấp 3</div>
-                <div class="lp-doc-desc">Chatbot chỉ dự đoán từ tiếp theo. ReAct Agent dùng vòng lặp Thought-Action-Observation gọi tool lấy dữ liệu thực.</div>
-              </div>
-
-              <div class="lp-doc-item" onclick="openDocModal('MC02')">
-                <div class="lp-doc-tag">LƯU Ý 02 · LỖI PHỔ BIẾN</div>
-                <div class="lp-doc-title">Bẫy ngắt sớm (Truncated Loop)</div>
-                <div class="lp-doc-desc">Đặt lệnh break ngay sau Tool 1 khiến Agent không nhận được Observation để gọi Tool 2 (như kiểm tra xong không đặt lịch).</div>
-              </div>
-
-              <div class="lp-doc-item" onclick="openDocModal('MC03')">
-                <div class="lp-doc-tag">LƯU Ý 03 · CHUẨN SCHEMA</div>
-                <div class="lp-doc-title">Khai báo Tool Schema chuẩn JSON</div>
-                <div class="lp-doc-desc">Thiếu mảng required hoặc sai type khiến LLM sinh tham số rỗng, văng lỗi khi dispatch tool call.</div>
-              </div>
-
-              <div class="lp-doc-item" onclick="openDocModal('MC04')">
-                <div class="lp-doc-tag">LƯU Ý 04 · AN TOÀN HỌC VỤ</div>
-                <div class="lp-doc-title">Guardrail chặn truy cập chéo (TC05)</div>
-                <div class="lp-doc-desc">Bắt buộc phải chặn học viên truy vấn GPA hoặc đặt lịch thay sinh viên khác trước khi gọi tool.</div>
-              </div>
-            </div>
-
-            <!-- Sub-tab 2: Nguồn đã lập chỉ mục (Provenance & AST) -->
-            <div id="tab-content-prov" class="lp-prov-box" style="display:none;">
-              <div class="lp-prov-header">
-                <div style="display:flex; justify-content:space-between; align-items:center; font-weight:750; color:#1E293B;">
-                  <span>📦 Mã Nguồn & Tài Liệu Lab 03</span>
-                  <span style="color:#15803D; font-size:10px; font-weight:800;">✓ SHA-256</span>
-                </div>
-                <div style="color:var(--lp-muted); font-size:10.5px; margin-top:3px;">
-                  <span id="prov-count-label">24 files · 119 chunks</span><br>
-                  Manifest: <code style="color:var(--lp-primary); font-size:9.5px;" id="prov-manifest-hash">8869483bf3...</code>
-                </div>
-              </div>
+            <div class="lp-prov-box">
+              <!-- Search box -->
+              <input type="text" id="prov-search" class="lp-prov-search" placeholder="🔍 Tìm nhanh file hoặc hàm/class..." oninput="filterProvList()">
 
               <!-- Category Filter Pills -->
               <div class="lp-prov-filter-row">
@@ -551,8 +512,7 @@ svg { display: block; }
                 <button class="lp-filter-pill" id="pill-filter-tests" onclick="setProvFilter('tests')">🧪 Kiểm thử (4)</button>
               </div>
 
-              <input type="text" id="prov-search" class="lp-prov-search" placeholder="🔍 Tìm kiếm file hoặc class/def AST..." oninput="filterProvList()">
-
+              <!-- List of files -->
               <div class="lp-prov-list" id="prov-list-container">
                 <!-- Dynamically rendered -->
               </div>
@@ -701,18 +661,7 @@ svg { display: block; }
     </div>
   </div>
 
-  <!-- Note Details Modal -->
-  <div class="lp-modal-layer" id="doc-modal" onclick="closeDocModal(event)">
-    <div class="lp-modal-sheet">
-      <div class="lp-modal-top">
-        <h3 id="modal-doc-title">Chi tiết lưu ý</h3>
-        <button style="background:none; border:none; font-size:18px; cursor:pointer;" onclick="document.getElementById('doc-modal').style.display='none'">×</button>
-      </div>
-      <div class="lp-modal-content" id="modal-doc-body"></div>
-    </div>
-  </div>
-
-    <!-- Code & Document Inspector Modal (Traceable Provenance & AST) -->
+  <!-- Code & Document Inspector Modal (Traceable Provenance & AST) -->
   <div class="lp-modal-layer" id="code-modal" onclick="closeCodeModal(event)">
     <div class="lp-modal-sheet lp-code-sheet">
       <!-- Modal Header -->
@@ -773,41 +722,6 @@ svg { display: block; }
     /* ========================================================================= */
     /* DAY 03 REAL DATA STORE: MISCONCEPTIONS & ROUNDS                           */
     /* ========================================================================= */
-
-    const DOC_STORE = {
-      "MC01": {
-        title: "Lưu ý 01: Chatbot Cấp 2 vs ReAct Agent Cấp 3 khác gì nhau?",
-        content: `❌ QUAN NIỆM SAI: Nhiều bạn nghĩ Chatbot thông thường chỉ cần viết prompt dài hoặc dùng model xịn (gpt-4o) là có thể tự tra cứu GPA, lịch thi và đặt lịch hẹn chính xác.
-
-✅ CĂN CỨ THỰC TẾ (README.md & docs/CODELAB.md):
-- Chatbot Cấp 2 chỉ sinh text dựa trên xác suất từ tập dữ liệu tĩnh lúc huấn luyện. Khi hỏi dữ liệu thực tế thay đổi liên tục (như lịch hẹn hay số tín chỉ), Chatbot chắc chắn sẽ NÓI BỪA (Hallucination).
-- ReAct Agent Cấp 3 biết kích hoạt vòng lặp Thought -> Action -> Observation qua giao thức MCP để chủ động gọi tool (như academic_query, schedule_appointment), lấy dữ liệu thật về rồi mới tổng hợp câu trả lời chính xác 100%.`
-      },
-      "MC02": {
-        title: "Lưu ý 02: Bẫy Ngắt Sớm Vòng Lặp (Truncated ReAct Loop)",
-        content: `❌ QUAN NIỆM SAI: Đặt lệnh 'break' ngay sau khi gọi Tool lần đầu tiên trong hàm xử lý ReAct Loop (src/app.py).
-
-✅ CĂN CỨ THỰC TẾ (plans/lab03-task-scenario.md & docs/trace_waterfall.json):
-- Khi gặp câu hỏi suy luận đa bước (Multi-step Reasoning như TC04: 'Kiểm tra xem SV2026001 đã đủ điều kiện tốt nghiệp chưa?'), Agent cần gọi Tool 1 (academic_query) lấy 118 tín chỉ, rồi tiếp tục suy luận gọi Tool 2 (curriculum_query) để lấy yêu cầu 128 tín chỉ và so sánh.
-- Nếu đặt lệnh break sớm, vòng lặp dừng ngay lập tức sau Tool 1, kết quả trả về bị dở dang và trượt test case acceptance!`
-      },
-      "MC03": {
-        title: "Lưu ý 03: Khai Báo Tool Schema Sai Chuẩn JSON Schema",
-        content: `❌ QUAN NIỆM SAI: Chỉ mô tả sơ sài tên hàm hoặc quên mảng 'required' khi khai báo Tool Schema trong src/tools.py.
-
-✅ CĂN CỨ THỰC TẾ (src/tools.py & tests/unit/test_tools.py):
-- LLM Native Tool Calling phụ thuộc hoàn toàn vào cấu trúc JSON Schema (type: 'object', properties, required).
-- Nếu thiếu mảng 'required', LLM có thể gọi schedule_appointment mà không truyền student_id hoặc datetime, làm hàm thực thi văng lỗi Exception và làm hỏng luồng hội thoại.`
-      },
-      "MC04": {
-        title: "Lưu ý 04: Guardrail Chống Vi Phạm Bảo Mật Học Vụ (TC05)",
-        content: `❌ QUAN NIỆM SAI: Nghĩ rằng Agent cứ nhận được yêu cầu của người dùng là tự động thực thi Tool bất kể đối tượng nào.
-
-✅ CĂN CỨ THỰC TẾ (config/test_cases.json TC05 & src/guardrail_agent.py):
-- Test Case TC05 yêu cầu: Học viên hỏi GPA của SV9999999 và đòi đặt lịch hẹn giúp người đó.
-- Lớp Guardrail bắt buộc phải chặn lại NGAY TRƯỚC KHI gọi Tool, từ chối tiết lộ thông tin của người khác và yêu cầu người dùng cung cấp MSSV chính chủ.`
-      }
-    };
 
     const ROUNDS_DATA = [
       {
@@ -1031,13 +945,7 @@ svg { display: block; }
       }
     }
 
-    function switchLeftTab(tab) {
-      const isNotes = (tab === "notes");
-      document.getElementById("tab-btn-notes").classList.toggle("active", isNotes);
-      document.getElementById("tab-btn-prov").classList.toggle("active", !isNotes);
-      document.getElementById("tab-content-notes").style.display = isNotes ? "grid" : "none";
-      document.getElementById("tab-content-prov").style.display = isNotes ? "none" : "flex";
-    }
+    
 
     function setProvFilter(cat) {
       activeProvFilter = cat;
@@ -1117,7 +1025,7 @@ svg { display: block; }
         banner.className = "lp-feedback-banner lp-feedback--warn";
         document.getElementById("feedback-title").innerHTML = "⚠️ CẦN LƯU Ý (CHƯA TỐI ƯU)";
         document.getElementById("feedback-text").innerHTML = `
-          Phương án [${opt.id}] gặp lỗi kiến trúc: Dẫn đến nguy cơ Truncated Loop hoặc lỗ hổng bảo mật học vụ. Vui lòng tham khảo mục Lưu ý bên trái hoặc hỏi Mentor.
+          Phương án [${opt.id}] gặp lỗi kiến trúc: Dẫn đến nguy cơ Truncated Loop hoặc lỗ hổng bảo mật học vụ. Vui lòng đối chiếu mã nguồn và tài liệu bên trái hoặc hỏi Mentor.
         `;
       }
 
@@ -1274,9 +1182,9 @@ svg { display: block; }
               full_sha: f.sha256,
               sym: (f.symbols || []).map(s => s.name).slice(0, 6)
             }));
-            document.getElementById("prov-count-label").textContent = `${data.files_count} files · ${data.chunks_count} chunks`;
+            
             if (data.source_manifest_sha256) {
-              document.getElementById("prov-manifest-hash").textContent = data.source_manifest_sha256.substring(0, 14) + "...";
+              
             }
           }
           filterProvList();
@@ -1535,18 +1443,7 @@ svg { display: block; }
       }
     }
 
-    function openDocModal(key) {
-      const doc = DOC_STORE[key];
-      if (!doc) return;
-      document.getElementById("modal-doc-title").textContent = doc.title;
-      document.getElementById("modal-doc-body").innerHTML = doc.content.replace(/\n\n/g, "<br><br>").replace(/\n/g, "<br>");
-      document.getElementById("doc-modal").style.display = "grid";
-    }
-
-    function closeDocModal(e) {
-      if (e.target.id === "doc-modal") {
-        document.getElementById("doc-modal").style.display = "none";
-      }
+    
     }
 
     function init() {
