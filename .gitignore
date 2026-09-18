@@ -143,6 +143,9 @@ rabbitmq-data/
 
 # Data
 data/
+data/generated/
+data/private/
+sessions/
 
 # ActiveMQ
 activemq-data/
