@@ -65,10 +65,8 @@ class PrototypeWebHandler(BaseHTTPRequestHandler):
                     cat = "docs"
                     if p.startswith("src/"):
                         cat = "code"
-                    elif p.startswith("tests/"):
+                    elif p.startswith("tests/") or p.startswith("config/") or p.endswith(".json"):
                         cat = "tests"
-                    elif p.startswith("config/") or p.endswith(".json"):
-                        cat = "config"
                     f["category"] = cat
                     filtered_files.append(f)
 
