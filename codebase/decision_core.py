@@ -208,6 +208,66 @@ Hãy đưa ra quyết định sư phạm theo định dạng JSON quy định.""
                 ],
             }, ensure_ascii=False)
 
+        # Day 03: ReAct Loop & Truncated Loop & Tool Schema & Guardrail
+        if any(w in inp for w in (
+            "truncated", "ngắt luồng", "ngắt sớm", "vòng lặp react", "react loop",
+            "observation", "thought", "break", "infinite loop"
+        )):
+            return json.dumps({
+                "action_type": "CITE_GROUNDED",
+                "risk_level": "LOW",
+                "feedback": "Vòng lặp ReAct trong src/app.py xử lý Thought -> Action -> Observation. Cần nạp Observation vào messages và tiếp tục vòng lặp để gọi tiếp Tool 2, tránh bẫy Truncated Loop do đặt lệnh break sai chỗ.",
+                "citation": "src/app.py:36-75 · ReAct Loop Execution Layer",
+                "simulated_consequence": "Nếu lệnh break ngắt sớm sau Tool 1, Agent sẽ dừng luồng và không thể thực hiện các bài toán suy luận đa bước (như TC03, TC04).",
+                "options": [
+                    {"id": "A", "label": "Nạp Observation vào messages và duy trì while step < MAX_STEPS", "correct": True},
+                    {"id": "B", "label": "Đặt break ngay sau khi gọi Tool lần đầu", "correct": False},
+                    {"id": "C", "label": "Bỏ hẳn điều kiện dừng MAX_STEPS", "correct": False},
+                ],
+            }, ensure_ascii=False)
+
+        if any(w in inp for w in ("schema", "required", "tool", "dispatch", "json schema", "properties")):
+            return json.dumps({
+                "action_type": "CITE_GROUNDED",
+                "risk_level": "LOW",
+                "feedback": "Tool Schema trong src/tools.py phải tuân thủ chuẩn JSON Schema với type: 'object', properties chi tiết và mảng required bắt buộc để LLM không sinh arguments rỗng.",
+                "citation": "src/tools.py:1-40 · Tool Schemas & Dispatcher",
+                "simulated_consequence": "Thiếu mảng required sẽ khiến LLM sinh thiếu tham số khi gọi schedule_appointment, làm hàm dispatch văng lỗi runtime.",
+                "options": [
+                    {"id": "A", "label": "Khai báo đầy đủ mảng required: ['student_id', 'advisor_id', 'datetime']", "correct": True},
+                    {"id": "B", "label": "Bỏ qua trường required để cho gọn", "correct": False},
+                    {"id": "C", "label": "Chỉ dùng chuỗi mô tả tự do không theo schema", "correct": False},
+                ],
+            }, ensure_ascii=False)
+
+        if any(w in inp for w in ("guardrail", "bảo mật", "sv9999999", "khác", "tiết lộ", "học vụ", "tc05")):
+            return json.dumps({
+                "action_type": "WARN_PREMATURE",
+                "risk_level": "MEDIUM",
+                "feedback": "Theo quy chế bảo vệ dữ liệu học viên (TC05), lớp Guardrail phải kiểm tra và từ chối truy vấn hồ sơ hoặc đặt lịch thay sinh viên khác trước khi gọi Tool.",
+                "citation": "src/guardrail_agent.py & config/test_cases.json TC05",
+                "simulated_consequence": "Nếu bỏ qua Guardrail, Agent sẽ làm lộ thông tin cá nhân của sinh viên khác, bị đánh trượt tiêu chí an toàn trong Rubric.",
+                "options": [
+                    {"id": "A", "label": "Chặn qua Guardrail trước khi dispatch tool call", "correct": True},
+                    {"id": "B", "label": "Thực thi luôn không cần kiểm tra quyền sinh viên", "correct": False},
+                    {"id": "C", "label": "Chỉ cảnh báo sau khi đã lấy được dữ liệu", "correct": False},
+                ],
+            }, ensure_ascii=False)
+
+        if any(w in inp for w in ("trace", "waterfall", "báo cáo", "nộp bài", "rubric")):
+            return json.dumps({
+                "action_type": "CITE_GROUNDED",
+                "risk_level": "LOW",
+                "feedback": "Tệp docs/trace_waterfall.json ghi lại chi tiết các bước Thought, Action, Observation và độ trễ (latency_ms) của từng test case. Đây là bằng chứng bắt buộc để nghiệm thu bài nộp trong docs/trace_eval.md.",
+                "citation": "docs/trace_waterfall.json & docs/trace_eval.md",
+                "simulated_consequence": "Nếu không có trace_waterfall.json, giám khảo không thể xác nhận Agent thực sự chạy Native Tool Calling trên LLM API thật.",
+                "options": [
+                    {"id": "A", "label": "Xuất đầy đủ trace_waterfall.json cho 5 test cases", "correct": True},
+                    {"id": "B", "label": "Chỉ nộp code mà không xuất trace log", "correct": False},
+                    {"id": "C", "label": "Tự tay gõ lại trace log giả lập", "correct": False},
+                ],
+            }, ensure_ascii=False)
+
         # Class 4: Domain Specific / Premature Action / Anti-patterns / Overwhelming slides
         if any(w in inp for w in (
             "code luôn", "bắt đầu code", "viết hàm ngay", "chạy thẳng", "không cần test",
@@ -217,10 +277,10 @@ Hãy đưa ra quyết định sư phạm theo định dạng JSON quy định.""
                 "action_type": "WARN_PREMATURE",
                 "risk_level": "MEDIUM",
                 "feedback": "Cảnh báo: Hành động này có rủi ro kỹ thuật (bỏ qua checkpoint, dồn thông tin quá tải hoặc nuốt lỗi ngầm bằng pass).",
-                "citation": "K4-Day01-Lab / README.md Checkpoint & Exception Rules",
+                "citation": "K4-Day03-Lab / README.md Checkpoint & Exception Rules",
                 "simulated_consequence": "Hành động vội vàng hoặc giấu lỗi sẽ khiến ReAct loop bị gãy trace hoặc ứng dụng chạy sai logic mà không có log debug.",
                 "options": [
-                    {"id": "A", "label": "Dùng list_files và inspect_lab_task để kiểm tra template và checkpoint trước", "correct": True},
+                    {"id": "A", "label": "Kiểm tra template và checklist trong docs/CODELAB.md trước khi code", "correct": True},
                     {"id": "B", "label": "Tiếp tục code mà không cần đối chiếu tài liệu", "correct": False},
                     {"id": "C", "label": "Bỏ qua lỗi và xem như đã hoàn thành", "correct": False},
                 ],
@@ -234,7 +294,7 @@ Hãy đưa ra quyết định sư phạm theo định dạng JSON quy định.""
             return json.dumps({
                 "action_type": "CLARIFY_AMBIGUOUS",
                 "risk_level": "MEDIUM",
-                "feedback": "Yêu cầu của bạn chưa đủ thông tin định vị. Vui lòng làm rõ: Bạn đang ở bài Lab nào, task mấy hoặc cung cấp chi tiết mã lỗi (traceback).",
+                "feedback": "Yêu cầu của bạn chưa đủ thông tin định vị. Vui lòng làm rõ: Bạn đang gặp lỗi ở Task nào trong 4 task của Day 03, hoặc cung cấp chi tiết mã lỗi (traceback).",
                 "citation": "HAX G9 · Support efficient correction & clarification",
                 "simulated_consequence": "Nếu không có thông tin lỗi hoặc checkpoint cụ thể, AI chỉ có thể phỏng đoán và dễ đưa ra giải pháp sai lệch.",
                 "options": [
@@ -249,13 +309,13 @@ Hãy đưa ra quyết định sư phạm theo định dạng JSON quy định.""
             "tín chỉ", "quy chế", "temperature", "api key", "bảo mật", "fei-fei li",
             "slide", "python", "dùng python", "ngôn ngữ"
         )):
-            citation = "[T01-042] Slide LLM Parameter Mastery"
+            citation = "docs/CODELAB.md §Day03 ReAct Architecture"
             if "tín chỉ" in inp or "quy chế" in inp:
-                citation = "[Quy chế Đào tạo VinUni §12 · Điều kiện tốt nghiệp]"
+                citation = "[Quy chế Đào tạo VinUni §12 · Điều kiện tốt nghiệp: 128 TC, GPA >= 2.0]"
             elif "fei-fei li" in inp:
                 citation = "[Slide Bài giảng Vision & Data Revolution]"
             elif "python" in inp:
-                citation = "[K4-Day01-Lab / README.md §Environment Requirements · Python 3.10+]"
+                citation = "[K4-Day03-Lab / README.md §Environment · Python 3.10-3.12]"
 
             return json.dumps({
                 "action_type": "CITE_GROUNDED",
