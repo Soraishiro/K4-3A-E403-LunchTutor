@@ -5,18 +5,30 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SRC_PATH = REPO_ROOT / "src"
-if str(SRC_PATH) not in sys.path:
-    sys.path.insert(0, str(SRC_PATH))
+CODEBASE_PATH = REPO_ROOT / "codebase"
+if str(CODEBASE_PATH) not in sys.path:
+    sys.path.insert(0, str(CODEBASE_PATH))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-from labsim.agent import LabSimAgent
-from labsim.tools import (
-    ToolRegistry,
-    get_chunk_by_id,
-    get_manifest_file_outline,
-    load_chunk_index,
-    search_sources,
-)
+try:
+    from codebase.agent import LabSimAgent
+    from codebase.tools import (
+        ToolRegistry,
+        get_chunk_by_id,
+        get_manifest_file_outline,
+        load_chunk_index,
+        search_sources,
+    )
+except ImportError:
+    from agent import LabSimAgent
+    from tools import (
+        ToolRegistry,
+        get_chunk_by_id,
+        get_manifest_file_outline,
+        load_chunk_index,
+        search_sources,
+    )
 
 
 class DummyLLMClient:

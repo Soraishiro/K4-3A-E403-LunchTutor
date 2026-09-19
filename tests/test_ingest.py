@@ -5,13 +5,16 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SRC_PATH = REPO_ROOT / "src"
-if str(SRC_PATH) not in sys.path:
-    sys.path.insert(0, str(SRC_PATH))
+CODEBASE_PATH = REPO_ROOT / "codebase"
+if str(CODEBASE_PATH) not in sys.path:
+    sys.path.insert(0, str(CODEBASE_PATH))
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from labsim.ingest import scan_sources
+try:
+    from codebase.ingest import scan_sources
+except ImportError:
+    from ingest import scan_sources
 
 
 class TestIngest(unittest.TestCase):

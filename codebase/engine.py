@@ -1,5 +1,5 @@
 """
-LabPath / LunchTutor — Core Simulation Engine
+LunchTutor — Core Simulation Engine
 
 Centralized engine combining:
 1. Providers: Mock, OpenAI, Gemini (pure stdlib urllib, zero external dependencies)
@@ -22,6 +22,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
+
+# Shared SSL context for API calls (bypass cert verification in restricted envs)
 
 # ---------------------------------------------------------------------------
 # 1. Base Paths & Data Root
@@ -107,6 +109,7 @@ class OpenAIProvider(Provider):
             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
         )
         try:
+            # Default TLS verification (no custom unverified context).
             with urllib.request.urlopen(req, timeout=45) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
             msg = data["choices"][0]["message"]
@@ -134,6 +137,7 @@ class GeminiProvider(Provider):
         payload = {"contents": contents, "generationConfig": {"temperature": temperature}}
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
         try:
+            # Default TLS verification (no custom unverified context).
             with urllib.request.urlopen(req, timeout=45) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
             text = data["candidates"][0]["content"]["parts"][0].get("text", "")

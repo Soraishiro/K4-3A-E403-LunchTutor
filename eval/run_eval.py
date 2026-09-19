@@ -165,7 +165,7 @@ def generate_markdown_report(results: list[dict[str, Any]], pass_rate: float, pa
 
     md = f"""# Báo cáo Đo lường & Kiểm thử Sơ bộ Lượt đầu (Checkpoint 3 — CP3)
 
-**Dự án:** LabPath · Nhóm LunchTutor · Lớp 3A · Zone 3  
+**Dự án:** Lunch Tutorial · Nhóm Lunch Tutorial · Lớp 3A · Zone 3  
 **Thời điểm thực thi:** `{now_str}`  
 **Bộ dữ liệu kiểm thử:** [`eval/golden_set.json`](file:///S:/ai20k/K4-3A-E403-LunchTutor/eval/golden_set.json) (20 ca độc lập)  
 **File log chi tiết lượt chạy:** [`eval/traces/{trace_file.name}`](file:///S:/ai20k/K4-3A-E403-LunchTutor/eval/traces/{trace_file.name})  

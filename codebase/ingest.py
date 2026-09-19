@@ -29,7 +29,6 @@ SECRET_PATTERNS = [
 
 
 def extract_python_symbols(code: str) -> list[dict[str, Any]]:
-    """Extract class and function symbols from Python code using stdlib ast."""
     symbols: list[dict[str, Any]] = []
     try:
         tree = ast.parse(code)
@@ -54,10 +53,6 @@ def extract_python_symbols(code: str) -> list[dict[str, Any]]:
 
 
 def classify_source_kind(rel_path: str) -> Literal["instruction", "code", "reported"]:
-    """
-    Epistemic taxonomy classifier.
-    Never returns 'verified_observation' automatically.
-    """
     norm = rel_path.lower().replace("\\", "/")
     parts = norm.split("/")
     filename = parts[-1]
@@ -70,7 +65,6 @@ def classify_source_kind(rel_path: str) -> Literal["instruction", "code", "repor
 
 
 def contains_secret(text: str) -> bool:
-    """Check text against known credential and secret regex patterns."""
     for pattern in SECRET_PATTERNS:
         if pattern.search(text):
             return True
@@ -84,9 +78,6 @@ def scan_sources(
     chunk_size: int = 40,
     chunk_overlap: int = 5
 ) -> dict[str, Any]:
-    """
-    Scan source directory offline and produce traceable provenance artifacts.
-    """
     source_dir = Path(source_dir).resolve()
     out_dir = Path(out_dir).resolve()
 
@@ -95,7 +86,6 @@ def scan_sources(
     if not source_dir.is_dir():
         raise NotADirectoryError(f"Source path is not a directory: {source_dir}")
 
-    # Guard against overwriting source or invalid nesting
     if source_dir == out_dir:
         raise ValueError("out_dir cannot be identical to source_dir")
 
@@ -105,11 +95,9 @@ def scan_sources(
     skipped_manifest: list[dict[str, Any]] = []
     all_chunks: list[dict[str, Any]] = []
 
-    # Gather candidate paths
     all_paths: list[Path] = []
     for root, dirs, files in os.walk(source_dir):
         root_path = Path(root)
-        # Exclude hidden directories in-place to prune walk
         dirs[:] = [
             d for d in dirs
             if not d.startswith(".") and d not in ("node_modules", "target", "dist", "build")
@@ -117,7 +105,6 @@ def scan_sources(
         for f in files:
             all_paths.append(root_path / f)
 
-    # Sort deterministically
     all_paths.sort(key=lambda p: p.relative_to(source_dir).as_posix())
 
     for file_path in all_paths:
@@ -126,7 +113,6 @@ def scan_sources(
         except ValueError:
             continue
 
-        # Check for path traversal or hidden/symlink
         parts = rel_path.split("/")
         if any(part.startswith(".") for part in parts) or any(part == ".." for part in parts):
             skipped_manifest.append({"path": rel_path, "reason": "hidden_or_traversal"})
@@ -141,30 +127,25 @@ def scan_sources(
             skipped_manifest.append({"path": rel_path, "reason": f"unsupported_extension_{ext}"})
             continue
 
-        # Check exclusion patterns
         lower_name = file_path.name.lower()
         if lower_name.startswith(".env") or lower_name.startswith("tutor_turns") or lower_name.startswith("transcript"):
             skipped_manifest.append({"path": rel_path, "reason": "excluded_filename_pattern"})
             continue
 
-        # Check size
         file_size = file_path.stat().st_size
         if file_size > MAX_FILE_SIZE_BYTES:
             skipped_manifest.append({"path": rel_path, "reason": "file_exceeds_size_limit"})
             continue
 
-        # Read raw bytes & hash
         raw_bytes = file_path.read_bytes()
         file_sha256 = hashlib.sha256(raw_bytes).hexdigest()
 
-        # Strict UTF-8 decode
         try:
             text = raw_bytes.decode("utf-8")
         except UnicodeDecodeError:
             skipped_manifest.append({"path": rel_path, "reason": "utf8_decode_error"})
             continue
 
-        # Secret check
         if contains_secret(text):
             skipped_manifest.append({"path": rel_path, "reason": "credential_pattern_detected"})
             continue
@@ -190,7 +171,6 @@ def scan_sources(
 
         files_manifest.append(file_record)
 
-        # Chunk lines
         if total_lines == 0:
             continue
 
@@ -224,7 +204,6 @@ def scan_sources(
                 break
             start_idx += step
 
-    # Deterministic manifest hash from canonical files JSON
     canonical_files_json = json.dumps(files_manifest, sort_keys=True, separators=(",", ":"))
     source_manifest_sha256 = hashlib.sha256(canonical_files_json.encode("utf-8")).hexdigest()
 
@@ -238,7 +217,6 @@ def scan_sources(
         "skipped": skipped_manifest,
     }
 
-    # Write output artifacts
     manifest_path = out_dir / "source_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
 

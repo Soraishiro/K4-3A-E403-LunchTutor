@@ -1,5 +1,5 @@
 """
-LabPath / LunchTutor — Central Decision Core (CP3 AI Prototype)
+LunchTutor — Central Decision Core (CP3 AI Prototype)
 
 This module implements the primary AI decision engine:
 1. Receives student input, lab context, and current stage.
@@ -21,6 +21,11 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+try:
+    from codebase.tools import load_env_api_key
+except ImportError:  # pragma: no cover
+    from tools import load_env_api_key
 
 # ---------------------------------------------------------------------------
 # Directories & Logging
@@ -54,6 +59,9 @@ class InferenceLog:
     raw_response: str
     decision: dict[str, Any]
     status: str = "SUCCESS"
+    provider_attempted: str = ""
+    provider_actual: str = ""
+    fallback_reason: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -90,20 +98,14 @@ QUY TẮC BẮT BUỘC:
 """
 
 
-# ---------------------------------------------------------------------------
-# Central Decision Engine
-# ---------------------------------------------------------------------------
-def _load_fallback_api_key() -> str:
-    # Gate 0 crash fix: __init__ referenced this name but it was never
-    # defined, so instantiating the engine without env keys raised NameError.
-    # No key -> offline heuristic provider (see _detect_provider).
-    return ""
+
+
 
 
 class CentralDecisionEngine:
     def __init__(self, model: str = "gpt-4o-mini", api_key: str = ""):
         self.model = model
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY") or _load_fallback_api_key() or ""
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY") or load_env_api_key() or ""
         self.provider_type = self._detect_provider()
 
     def _detect_provider(self) -> str:
@@ -123,28 +125,38 @@ class CentralDecisionEngine:
 Hãy đưa ra quyết định sư phạm theo định dạng JSON quy định."""
 
         t0 = time.perf_counter()
+        provider_attempted = self.provider_type
+        provider_actual = "heuristic-deterministic-engine"
+        status = "heuristic_offline"
+        fallback_reason = ""
         raw_response = ""
-        model_used = self.model
 
         if self.provider_type == "openai":
-            raw_response = self._call_openai(prompt)
-            model_used = self.model
+            raw_response, ok, reason = self._call_openai(prompt)
+            provider_actual = self.model if ok else "heuristic-deterministic-engine"
+            status = "live_success" if ok else "live_error_fallback"
+            fallback_reason = "" if ok else reason
         elif self.provider_type == "gemini":
-            raw_response = self._call_gemini(prompt)
-            model_used = "gemini-2.5-flash"
+            raw_response, ok, reason = self._call_gemini(prompt)
+            provider_actual = "gemini-2.5-flash" if ok else "heuristic-deterministic-engine"
+            status = "live_success" if ok else "live_error_fallback"
+            fallback_reason = "" if ok else reason
         else:
             raw_response = self._solve_heuristic(student_input, current_stage)
-            model_used = "heuristic-deterministic-engine"
 
         latency_ms = (time.perf_counter() - t0) * 1000
 
         # Parse outcome
         outcome = self._parse_outcome(raw_response, student_input)
 
-        # Record inference log
+        # Record inference log (server-side audit only; never sent to clients).
         log_entry = InferenceLog(
             timestamp=datetime.now(timezone.utc).isoformat(),
-            model=model_used,
+            model=provider_actual,
+            provider_attempted=provider_attempted,
+            provider_actual=provider_actual,
+            status=status,
+            fallback_reason=fallback_reason,
             latency_ms=round(latency_ms, 2),
             input_prompt=prompt,
             raw_response=raw_response,
@@ -154,7 +166,7 @@ Hãy đưa ra quyết định sư phạm theo định dạng JSON quy định.""
 
         return outcome, log_entry
 
-    def _call_openai(self, prompt: str) -> str:
+    def _call_openai(self, prompt: str) -> tuple[str, bool, str]:
         payload = {
             "model": self.model,
             "messages": [
@@ -170,13 +182,15 @@ Hãy đưa ra quyết định sư phạm theo định dạng JSON quy định.""
             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
         )
         try:
+            # Default TLS verification (no custom unverified context).
             with urllib.request.urlopen(req, timeout=30) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-            return data["choices"][0]["message"]["content"]
+            return data["choices"][0]["message"]["content"], True, ""
         except Exception as err:
-            return self._solve_heuristic(prompt, f"Fallback due to OpenAI error: {err}")
+            reason = f"OpenAI error: {type(err).__name__}: {str(err)[:200]}"
+            return self._solve_heuristic(prompt, "heuristic-fallback"), False, reason
 
-    def _call_gemini(self, prompt: str) -> str:
+    def _call_gemini(self, prompt: str) -> tuple[str, bool, str]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
         payload = {
             "contents": [
@@ -186,11 +200,13 @@ Hãy đưa ra quyết định sư phạm theo định dạng JSON quy định.""
         }
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
         try:
+            # Default TLS verification (no custom unverified context).
             with urllib.request.urlopen(req, timeout=30) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            return data["candidates"][0]["content"]["parts"][0]["text"], True, ""
         except Exception as err:
-            return self._solve_heuristic(prompt, f"Fallback due to Gemini error: {err}")
+            reason = f"Gemini error: {type(err).__name__}: {str(err)[:200]}"
+            return self._solve_heuristic(prompt, "heuristic-fallback"), False, reason
 
     def _solve_heuristic(self, student_input: str, stage: str) -> str:
         """High-fidelity heuristic decision solver reflecting exact 4-class taxonomy."""

@@ -23,6 +23,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from codebase import app as appmod  # noqa: E402
+from codebase import tools as toolsmod  # noqa: E402
 
 
 def _sha_bytes(data: bytes) -> str:
@@ -97,6 +98,16 @@ class Gate0FixtureMixin:
                     "symbols": [],
                     "symbols_count": 0,
                 },
+                # Indexed and manifest-bound, but NOT allowlisted -> never visible.
+                {
+                    "path": "notes/private.md",
+                    "sha256": _sha_bytes(b"UNPUBLISHED-MARKER fixture\n"),
+                    "size_bytes": 1,
+                    "total_lines": 1,
+                    "source_kind": "reported",
+                    "symbols": [],
+                    "symbols_count": 0,
+                },
             ],
             "skipped": [{"path": ".env", "reason": "credential_pattern_detected"}],
         }
@@ -139,6 +150,31 @@ class Gate0FixtureMixin:
                 "text": "FAKE_KEY=not-real-fixture\n",
                 "source_kind": "reported",
             },
+            {
+                # Manifest-bound but not allowlisted -> never visible.
+                "chunk_id": "notes/private.md:1-1",
+                "lab_id": "day03",
+                "path": "notes/private.md",
+                "start_line": 1,
+                "end_line": 1,
+                "sha256": "c4",
+                "file_sha256": _sha_bytes(b"UNPUBLISHED-MARKER fixture\n"),
+                "text": "UNPUBLISHED-MARKER fixture\n",
+                "source_kind": "reported",
+            },
+            {
+                # Binding-valid (file_sha256 == manifest) but the on-disk
+                # file drifted -> live snapshot must drop it.
+                "chunk_id": "stale.md:1-1-live",
+                "lab_id": "day03",
+                "path": "stale.md",
+                "start_line": 1,
+                "end_line": 1,
+                "sha256": "c5",
+                "file_sha256": _sha_bytes(b"version ONE fixture\n"),
+                "text": "stale live fixture\n",
+                "source_kind": "reported",
+            },
         ]
         chunks_path = tmp / "source_chunks.jsonl"
         chunks_path.write_text(
@@ -159,17 +195,19 @@ class Gate0FixtureMixin:
             "PUBLIC_LAB_DIR": appmod.PUBLIC_LAB_DIR,
             "QA_MANIFEST_PATH": appmod.QA_MANIFEST_PATH,
             "QA_CHUNKS_PATH": appmod.QA_CHUNKS_PATH,
-            "ALLOWLIST_PUBLIC_PATHS": appmod.ALLOWLIST_PUBLIC_PATHS,
         }
+        self._saved_tools = {"ALLOWLIST_PUBLIC_PATHS": toolsmod.ALLOWLIST_PUBLIC_PATHS}
         appmod.PUBLIC_LAB_DIR = lab
         appmod.QA_MANIFEST_PATH = manifest_path
         appmod.QA_CHUNKS_PATH = chunks_path
-        appmod.ALLOWLIST_PUBLIC_PATHS = frozenset(self.ALLOW)
+        toolsmod.ALLOWLIST_PUBLIC_PATHS = frozenset(self.ALLOW)
         appmod._reset_publish_caches()
 
     def _unpatch_app(self):
         for k, v in self._saved.items():
             setattr(appmod, k, v)
+        for k, v in self._saved_tools.items():
+            setattr(toolsmod, k, v)
         appmod._reset_publish_caches()
 
 
@@ -410,6 +448,256 @@ class TestNoShellInRoutes(unittest.TestCase):
         src = Path(CODEBASE_PATH / "app.py").read_text(encoding="utf-8")
         for token in ("run_command", "subprocess", "os.system", "eval("):
             self.assertNotIn(token, src)
+
+
+def _no_keys_env():
+    return mock.patch.dict(os.environ, {"OPENAI_API_KEY": "", "GEMINI_API_KEY": ""})
+
+
+class TestRetrievalBoundary(Gate0FixtureMixin, unittest.TestCase):
+    """Unpublished/stale data must not surface via QA, decision evidence,
+    ToolRegistry results, or the chunks endpoint."""
+
+    def setUp(self):
+        import tempfile
+
+        self._tmp = tempfile.TemporaryDirectory()
+        lab, mp, cp = self._build_fixture(Path(self._tmp.name))
+        self._patch_app(lab, mp, cp)
+
+    def tearDown(self):
+        self._unpatch_app()
+        self._tmp.cleanup()
+
+    def _qa_mock(self, query):
+        with _no_keys_env(), mock.patch.object(
+            toolsmod, "load_env_api_key", return_value=""
+        ):
+            return appmod.answer_qa(query)
+
+    def test_qa_mock_never_shows_unpublished_or_stale(self):
+        for query, marker in (
+            ("FAKE_KEY", "FAKE_KEY"),
+            ("UNPUBLISHED-MARKER", "UNPUBLISHED-MARKER"),
+            ("stale live fixture", "stale live fixture"),
+        ):
+            with self.subTest(query=query):
+                resp = self._qa_mock(query)
+                blob = json.dumps(resp, ensure_ascii=False)
+                self.assertNotIn(marker, blob)
+                paths = {e["path"] for e in resp["evidence"]}
+                self.assertTrue(paths <= self.ALLOW)
+                self.assertNotIn("stale.md", paths)
+
+    def test_decision_evidence_filtered(self):
+        ev, _, _ = appmod.decision_evidence("FAKE_KEY UNPUBLISHED-MARKER stale")
+        blob = json.dumps(ev, ensure_ascii=False)
+        self.assertNotIn("FAKE_KEY", blob)
+        self.assertNotIn("UNPUBLISHED-MARKER", blob)
+        self.assertNotIn("stale.md", blob)
+
+    def test_tool_registry_filtered_without_verifier(self):
+        reg = toolsmod.ToolRegistry(self._tmp_path_dir(), "day03")
+        res = reg.execute("search_sources", {"query": "FAKE_KEY"})
+        self.assertEqual(res, [])
+        res = reg.execute("search_sources", {"query": "UNPUBLISHED-MARKER"})
+        self.assertEqual(res, [])
+        self.assertIn("error", reg.execute("read_source_chunk", {"chunk_id": ".env:1-1"}))
+        self.assertIn(
+            "error", reg.execute("read_source_chunk", {"chunk_id": "notes/private.md:1-1"})
+        )
+        self.assertIn("error", reg.execute("get_file_outline", {"path": ".env"}))
+        listed = {f["path"] for f in reg.execute("list_indexed_files", {})}
+        self.assertTrue(listed <= self.ALLOW)
+
+    def _tmp_path_dir(self):
+        return Path(self._tmp.name)
+
+    def test_tool_registry_live_verifier_drops_drifted(self):
+        # Binding-valid chunk for stale.md passes metadata, but the live
+        # snapshot (disk v2 vs manifest v1) must drop it.
+        reg = toolsmod.ToolRegistry(
+            self._tmp_path_dir(), "day03", verify_snapshot=appmod.snapshot_ok
+        )
+        res = reg.execute("search_sources", {"query": "stale live fixture", "top_k": 10})
+        self.assertEqual([r["chunk_id"] for r in res], [])
+        # A deny-everything verifier hides even public chunks (consulted).
+        reg2 = toolsmod.ToolRegistry(
+            self._tmp_path_dir(), "day03", verify_snapshot=lambda p: False
+        )
+        res2 = reg2.execute("search_sources", {"query": "public doc"})
+        self.assertEqual(res2, [])
+
+
+class TestCitationSplit(Gate0FixtureMixin, unittest.TestCase):
+    def setUp(self):
+        import tempfile
+
+        self._tmp = tempfile.TemporaryDirectory()
+        lab, mp, cp = self._build_fixture(Path(self._tmp.name))
+        self._patch_app(lab, mp, cp)
+
+    def tearDown(self):
+        self._unpatch_app()
+        self._tmp.cleanup()
+
+    def _qa_with_model(self, citations):
+        from codebase import engine as enginemod
+
+        payload = json.dumps({"answer": "A fixture", "citations": citations})
+
+        class FakeProvider:
+            model = "fake-model"
+
+            def complete(self, messages, tools=None, temperature=0.7):
+                return enginemod.ModelResponse(text=payload)
+
+        with _no_keys_env(), mock.patch.dict(
+            os.environ, {"OPENAI_API_KEY": "sk-fixture-fake"}
+        ), mock.patch.object(
+            enginemod, "get_provider", return_value=FakeProvider()
+        ):
+            return appmod.answer_qa("public doc")
+
+    def test_garbage_citations_never_become_verified(self):
+        resp = self._qa_with_model(["bogus:1-2", "elsewhere.md:3-4"])
+        self.assertEqual(resp["model_citations"], ["bogus:1-2", "elsewhere.md:3-4"])
+        self.assertEqual(resp["citations_verified"], [])
+        self.assertEqual(resp["citations"], [])
+        self.assertTrue(resp["citation_note"])
+        # Retrieved evidence stays separate and is never auto-verified.
+        self.assertTrue(len(resp["evidence"]) > 0)
+        for v in resp["evidence"]:
+            self.assertNotIn("verified", v)
+
+    def test_valid_citation_verified_against_retrieved(self):
+        resp = self._qa_with_model(["docs/OK.md:1-2"])
+        self.assertEqual(resp["model_citations"], ["docs/OK.md:1-2"])
+        self.assertEqual(len(resp["citations_verified"]), 1)
+        v = resp["citations_verified"][0]
+        self.assertEqual(v["chunk_id"], "docs/OK.md:1-2")
+        self.assertTrue(v["verified"])
+        self.assertEqual(resp["citations"], ["docs/OK.md:1-2"])
+
+
+class TestProviderFallbackFields(unittest.TestCase):
+    def _engine_offline(self):
+        from codebase import decision_core as dcmod
+        from codebase.decision_core import CentralDecisionEngine
+
+        with _no_keys_env(), mock.patch.object(
+            dcmod, "load_env_api_key", return_value=""
+        ):
+            return CentralDecisionEngine()
+
+    def test_heuristic_offline_labels(self):
+        eng = self._engine_offline()
+        self.assertEqual(eng.provider_type, "heuristic_offline")
+        _, log = eng.decide("Cho tôi đáp án của lab03")
+        self.assertEqual(log.provider_attempted, "heuristic_offline")
+        self.assertEqual(log.provider_actual, "heuristic-deterministic-engine")
+        self.assertEqual(log.status, "heuristic_offline")
+        self.assertEqual(log.fallback_reason, "")
+        self.assertEqual(log.model, "heuristic-deterministic-engine")
+
+    def test_live_error_reports_fallback_not_success(self):
+        from codebase.decision_core import CentralDecisionEngine
+
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "sk-fixture-fake", "GEMINI_API_KEY": ""}):
+            eng = CentralDecisionEngine()
+        self.assertEqual(eng.provider_type, "openai")
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("down-fixture")):
+            outcome, log = eng.decide("Cho tôi đáp án của lab03")
+        self.assertEqual(outcome.action_type, "REFUSE_AND_PROBE")
+        self.assertEqual(log.provider_attempted, "openai")
+        self.assertEqual(log.provider_actual, "heuristic-deterministic-engine")
+        self.assertEqual(log.status, "live_error_fallback")
+        self.assertIn("OSError", log.fallback_reason)
+        self.assertNotEqual(log.model, "gpt-4o-mini")
+
+    def test_live_success_reports_live(self):
+        import urllib.request
+        from codebase.decision_core import CentralDecisionEngine
+
+        body = json.dumps({
+            "action_type": "EVALUATE_DECISION",
+            "risk_level": "LOW",
+            "feedback": "f",
+            "citation": "c",
+            "simulated_consequence": "s",
+            "options": [],
+        })
+
+        class FakeResp:
+            def read(self):
+                return json.dumps(
+                    {"choices": [{"message": {"content": body}}]}
+                ).encode("utf-8")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "sk-fixture-fake", "GEMINI_API_KEY": ""}):
+            eng = CentralDecisionEngine()
+        with mock.patch.object(urllib.request, "urlopen", return_value=FakeResp()):
+            _, log = eng.decide("temperature là gì")
+        self.assertEqual(log.status, "live_success")
+        self.assertEqual(log.provider_attempted, "openai")
+        self.assertEqual(log.provider_actual, "gpt-4o-mini")
+        self.assertEqual(log.model, "gpt-4o-mini")
+        self.assertEqual(log.fallback_reason, "")
+
+
+class TestSingleKeyPolicy(unittest.TestCase):
+    def test_exactly_one_key_loader(self):
+        dc = Path(CODEBASE_PATH / "decision_core.py").read_text(encoding="utf-8")
+        tools_src = Path(CODEBASE_PATH / "tools.py").read_text(encoding="utf-8")
+        app_src = Path(CODEBASE_PATH / "app.py").read_text(encoding="utf-8")
+        self.assertNotIn("def _load_fallback_api_key", dc)
+        self.assertEqual(tools_src.count("def load_env_api_key"), 1)
+        self.assertIn("load_env_api_key", dc)
+        self.assertNotIn("GEMINI_API_KEY=", app_src)
+
+
+class TestQABoundaryHTTP(Gate0HTTPMixin, unittest.TestCase):
+    def setUp(self):
+        import tempfile
+
+        self._tmp = tempfile.TemporaryDirectory()
+        lab, mp, cp = self._build_fixture(Path(self._tmp.name))
+        self._patch_app(lab, mp, cp)
+        self._start_server()
+
+    def tearDown(self):
+        self._stop_server()
+        self._unpatch_app()
+        self._tmp.cleanup()
+
+    def _post(self, path, payload):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=15)
+        body = json.dumps(payload).encode("utf-8")
+        conn.request("POST", path, body=body, headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        data = resp.read()
+        headers = dict(resp.getheaders())
+        conn.close()
+        return resp.status, headers, data
+
+    def test_qa_mock_over_http_leaks_nothing_unpublished(self):
+        with _no_keys_env(), mock.patch.object(
+            toolsmod, "load_env_api_key", return_value=""
+        ):
+            status, headers, body = self._post(
+                "/api/qa", {"query": "FAKE_KEY UNPUBLISHED-MARKER stale"}
+            )
+        self.assertEqual(status, 200)
+        self.assertNotIn("Access-Control-Allow-Origin", headers)
+        text = body.decode("utf-8")
+        self.assertNotIn("FAKE_KEY", text)
+        self.assertNotIn("UNPUBLISHED-MARKER", text)
 
 
 if __name__ == "__main__":

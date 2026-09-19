@@ -4,14 +4,14 @@
 
 ## 👥 Thành viên nhóm & Phân công vai trò
 
-**Lớp:** 3A · **Phòng:** \_**\_ · **Cụm:** \_\_** · **Track:** \_\_\_\_
+**Lớp:** 3A · **Phòng:** E403 · **Cụm:** TBD · **Track:** D — Học tập thích ứng & tương tác
 
 | Họ và Tên | Mã Học Viên | Vai trò chính | Phần việc đảm nhiệm trong dự án |
 | --------- | ----------- | ------------- | ------------------------------- |
-|           |             |               |                                 |
-|           |             |               |                                 |
-|           |             |               |                                 |
-|           |             |               |                                 |
+| Đỗ Trịnh Huy Hoàng | 2A202602392 | Prompt/AI + evaluation owner | Coach context boundary; 20 golden cases, hai reviewer cho ca khó; ghi fail và kết quả thực |
+| Hoàng Bích Ngọc | 2A202602766 | Content + evidence owner | Chốt cohort/version/quyền sử dụng Lab 3; theo mạch VLearn–README/CODELAB–code–test/trace để tạo bundle, nguồn và key đã review |
+| Vũ Hiếu Thiên | 2A202602867 | Code + UX owner | Session, evidence, grader, tip, self-report, app và test; không viết vào repo Lab gốc |
+| Nguyễn Phạm Oanh Oanh | 2A202602665 | Spec/decision owner | Giữ scope thống nhất với bản design đã duyệt; đối chiếu CP4/changelog/quality bar |
 
 > Nhóm copy nguyên file README này về repo của mình, rồi điền bảng trên. Cột **Phần việc đảm nhiệm** ghi càng cụ thể càng tốt.
 
